@@ -1,0 +1,18 @@
+{
+  "name": "sharewell",
+  "version": "0.1.0",
+  "description": "Binance Spot portfolio analysis and approved rebalancing through official Binance MCP.",
+  "author": {
+    "name": "ezpahlevi"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Sharewell",
+    "shortDescription": "Analyze and rebalance your Binance Spot portfolio.",
+    "longDescription": "Inspect portfolio allocation, review a rebalance proposal, approve orders through Binance MCP, and reconcile the resulting balances in chat.",
+    "developerName": "ezpahlevi",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": ["Analyze my Binance Spot portfolio.", "Help me plan a portfolio rebalance."]
+  }
+}

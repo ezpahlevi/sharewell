@@ -1,0 +1,6 @@
+{
+  "name": "sharewell",
+  "version": "0.1.0",
+  "description": "Chat-based Binance Spot portfolio analysis and approved rebalancing through official Binance MCP.",
+  "skills": "./skills/"
+}
