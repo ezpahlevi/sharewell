@@ -1,0 +1,30 @@
+name: Sharewell checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run tests
+        run: python -B -m unittest discover -s tests -q
+      - name: Compile production Python
+        run: python -B -m compileall -q core providers scripts adapters skills
+      - name: Verify release packaging
+        shell: bash
+        run: |
+          temporary_dir="$(mktemp -d)"
+          trap 'rm -rf "$temporary_dir"' EXIT
+          python -B scripts/package_release.py --output "$temporary_dir/sharewell.zip"
+          test -s "$temporary_dir/sharewell.zip"

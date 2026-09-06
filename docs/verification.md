@@ -2,6 +2,10 @@
 
 Status: release candidate verified locally on 2026-09-07. Authenticated Binance Agentic reads work. Live trading remains unverified because the tested Agentic Spot sub-account contained no balances.
 
+The repository now includes a Codex repository marketplace entry, host-native MCP
+configuration, MIT licensing, and a minimal GitHub Actions workflow. CI is
+deterministic and never connects to Binance.
+
 ## Authenticated Binance evidence
 
 The configured Codex MCP connection used the official `https://agent.binance.com/mcp/agentic` endpoint and an existing OAuth session. After fixing DNS on the active Ethernet adapter, OAuth protected-resource metadata, Agentic catalog discovery, and authenticated read-only calls succeeded.
@@ -11,6 +15,11 @@ The live catalog exposed the Spot account, open-order, exchange-info, account-fi
 The account response identified an Agentic Spot account with trading permission. It contained zero nonzero balances and zero open orders. No order tool was invoked. No transaction, fill, receipt, or funded rebalance is claimed.
 
 The live `spot.newOrder` schema was inspected without invoking it. Sharewell's exact binding accepts its flat `symbol`, `side`, `type`, `timeInForce`, `quantity`, `price`, and `newClientOrderId` fields. Decimal strings are converted to native JSON numbers only when the conversion round-trips exactly; lossy values fail with `LOSSY_NATIVE_NUMBER`.
+
+The Codex marketplace smoke test used an isolated `CODEX_HOME`, added the local
+repository marketplace, listed `sharewell@sharewell`, and installed it into the
+isolated cache. The source entry points at the repository root, so the plugin is
+not duplicated under a second directory.
 
 ## Local behavior
 
@@ -32,7 +41,7 @@ python -B <skill-validator> skills/sharewell
 
 The OpenAI validators need PyYAML in their validation environment. Sharewell itself has no third-party runtime dependencies.
 
-The release-candidate source completed 66 tests. The plugin validator, canonical skill validator, and production-source cleanliness check also passed before packaging.
+The release-candidate source completed 68 tests. The plugin validator, canonical skill validator, production-source cleanliness check, and marketplace smoke test also passed before packaging. The ZIP extracted into a clean directory completed the same 68 tests and both validators.
 
 ## Limits
 

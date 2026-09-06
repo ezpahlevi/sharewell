@@ -5,10 +5,31 @@ conversation and the official Binance MCP connection; Sharewell computes values,
 allocation differences and bounded order proposals, then journals approved
 execution and reconciles fills with balances.
 
+[![Sharewell checks](https://github.com/ezpahlevi/sharewell/actions/workflows/ci.yml/badge.svg)](https://github.com/ezpahlevi/sharewell/actions/workflows/ci.yml)
+
+Binance Agent OS Mini Hackathon · Track A — Agent Creation · Theme — Trading Workflows
+
 The official Agentic OAuth connection, native Spot catalog, and authenticated
 read-only account flow were verified in Codex on 2026-09-07. The tested Agentic
 sub-account was empty, so no funded order was placed. See
 [verification](docs/verification.md) for the exact evidence and limits.
+
+## Judge Quickstart
+
+Install the repository marketplace in Codex:
+
+```text
+codex plugin marketplace add ezpahlevi/sharewell
+codex plugin add sharewell@sharewell
+```
+
+The plugin includes the official Binance Agent OS MCP endpoint. Complete Binance
+OAuth in the host, then ask: `Analyze my Binance Spot portfolio.` For a rebalance,
+provide exact target percentages and a slippage limit; Sharewell shows a proposal
+before any execution. Video status: pending.
+
+Technical details: [judge guide](docs/judge-guide.md). Demo plan:
+[demo guide](docs/demo.md). Submission fields: [submission](docs/submission.md).
 
 ## Install
 
@@ -48,6 +69,20 @@ One core and skill are shared by thin host adapters. There is no custom MCP
 server, dashboard, LLM API, background trader, margin, futures or withdrawal code.
 The host must supply authentic tool evidence; the journal is not a sandbox
 against a malicious host bypassing the skill.
+
+## Safety
+
+Sharewell is Spot-only. It has no Futures, Margin, withdrawal, or autonomous
+background-trading path. Approval in Sharewell does not bypass Binance's native
+confirmation. Ambiguous submissions are queried by their stable client order ID,
+never blindly repeated.
+
+## Verification
+
+Authenticated official Binance Agentic reads are verified. Local deterministic
+tests and packaging checks are verified. Funded order execution and final live
+rebalance remain not verified because the development Agentic Spot account is
+unfunded. See [verification](docs/verification.md).
 
 All symbols are discovered dynamically; there is no hardcoded coin or USDT list.
 Disconnected pricing, invalid filters, locked funds and residual dust remain
