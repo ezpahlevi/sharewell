@@ -52,12 +52,35 @@ class PackagingTests(unittest.TestCase):
                 names = archive.namelist()
                 self.assertTrue(all(name.startswith("sharewell/") for name in names))
                 self.assertFalse(any("__pycache__" in name or name.endswith(".sqlite") or "/.env" in name for name in names))
+                self.assertIn("sharewell/.mcp.json", names)
+                self.assertIn("sharewell/LICENSE", names)
                 self.assertNotIn("sharewell/docs/RESUME.md", names)
                 manifest = json.loads(archive.read("sharewell/release-manifest.json"))
                 for name, expected in manifest["files"].items():
                     self.assertEqual(hashlib.sha256(archive.read("sharewell/" + name)).hexdigest(), expected)
             with self.assertRaises(FileExistsError):
                 package(first)
+
+    def test_repository_marketplace_registers_root_plugin(self):
+        marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+        self.assertEqual(marketplace["name"], "sharewell")
+        self.assertEqual(marketplace["interface"]["displayName"], "Sharewell")
+        self.assertEqual(marketplace["plugins"], [{
+            "name": "sharewell",
+            "source": {"source": "local", "path": "./"},
+            "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+            "category": "Productivity",
+        }])
+
+    def test_host_manifests_reference_official_mcp_without_credentials(self):
+        config = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
+        server = config["mcpServers"]["binance-agentic"]
+        self.assertEqual(server, {"type": "http", "url": "https://agent.binance.com/mcp/agentic"})
+        codex = json.loads((ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual(codex["mcpServers"], "./.mcp.json")
+        claude = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+        self.assertNotIn("token", json.dumps(codex).lower())
+        self.assertNotIn("token", json.dumps(claude).lower())
 
     def test_self_contained_install_runs_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory(prefix="sharewell package ") as directory:

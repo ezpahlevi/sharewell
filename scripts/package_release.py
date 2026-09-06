@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTORIES = {"core", "providers", "adapters", "scripts", "skills", "tests", "docs",
                ".codex-plugin", ".claude-plugin"}
-ROOT_FILES = {"README.md", ".gitignore", "LICENSE", "LICENSE.md", "pyproject.toml"}
+ROOT_FILES = {"README.md", ".gitignore", ".mcp.json", "LICENSE", "LICENSE.md", "pyproject.toml"}
 SUFFIXES = {".py", ".md", ".json", ".toml"}
 EXCLUDED = {"__pycache__", ".git", "state", "node_modules", ".venv", "runtime"}
 
@@ -34,7 +34,7 @@ def package(destination: Path, root: Path = ROOT) -> dict:
         if not path.resolve().is_relative_to(root):
             raise ValueError("PATH_ESCAPE")
         entries[relative.as_posix()] = path.read_bytes()
-    required = {"README.md", ".codex-plugin/plugin.json", ".claude-plugin/plugin.json",
+    required = {"README.md", ".mcp.json", "LICENSE", ".codex-plugin/plugin.json", ".claude-plugin/plugin.json",
                 "skills/sharewell/SKILL.md", "core/journal.py", "providers/binance_mcp.py"}
     if not required <= entries.keys():
         raise ValueError("MISSING_RELEASE_FILES")

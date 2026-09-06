@@ -2,5 +2,13 @@
   "name": "sharewell",
   "version": "0.1.0",
   "description": "Chat-based Binance Spot portfolio analysis and approved rebalancing through official Binance MCP.",
+  "author": {
+    "name": "ezpahlevi",
+    "url": "https://github.com/ezpahlevi"
+  },
+  "homepage": "https://github.com/ezpahlevi/sharewell",
+  "repository": "https://github.com/ezpahlevi/sharewell",
+  "license": "MIT",
+  "keywords": ["binance", "agent-os", "mcp", "portfolio", "rebalance", "spot", "trading"],
   "skills": "./skills/"
 }

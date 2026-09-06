@@ -6,6 +6,18 @@ Use the official endpoint:
 https://agent.binance.com/mcp/agentic
 ```
 
+## Plugin-included connection
+
+Sharewell includes the endpoint definition without credentials. Codex reads it
+through `mcpServers` in `.codex-plugin/plugin.json`; Claude Code reads the root
+`.mcp.json` as a plugin MCP configuration. The host performs OAuth, permission
+selection, and Binance confirmation. Installation does not silently authenticate
+or grant trading access.
+
+The remote integration uses HTTP/streamable HTTP, which is the recommended MCP
+transport for remote services. Sharewell does not implement a replacement MCP
+server or direct Binance REST client.
+
 Authentication is OAuth managed by the AI host. Sharewell never accepts or stores an API key, OAuth token, cookie, or client secret. Binance creates or selects a dedicated Agentic sub-account during authorization. The main account can be exposed read-only when the user grants that scope. External withdrawals are unavailable through this MCP.
 
 ## Codex connection

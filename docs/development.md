@@ -21,3 +21,15 @@ python -B scripts/package_release.py --output <new-zip-path>
 ```
 
 Packaging is deterministic, refuses overwrite, excludes development handoff files and runtime state, and writes a SHA-256 manifest inside the archive.
+
+The repository marketplace smoke test uses an isolated Codex home:
+
+```powershell
+codex plugin marketplace add <repository> --json
+codex plugin add sharewell@sharewell --json
+```
+
+The marketplace metadata lives at `.agents/plugins/marketplace.json` and points
+to the plugin root with `./`. GitHub Actions repeats the tests, compiles
+production Python, and creates a temporary package without secrets or network
+calls to Binance.
