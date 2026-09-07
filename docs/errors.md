@@ -93,6 +93,10 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `POLICY_CHANGED` | Current hard policy differs from the proposed policy context. |
 | `ASSET_NOT_ALLOWED` | An asset is outside the configured allowlist. |
 | `BLOCKED_ASSET` | A blocked asset would need to change allocation. |
+| `LIVE_SNAPSHOT_REQUIRED` | Snapshot persistence requires an explicit live-evidence gate. |
+| `INVALID_SNAPSHOT_REASON` | Snapshot reason is unsupported. |
+| `SNAPSHOT_NOT_FOUND` | Persisted portfolio snapshot is missing. |
+| `INVALID_HISTORY_LIMIT` | History limit is outside the supported range. |
 
 ## Binance admission checks
 

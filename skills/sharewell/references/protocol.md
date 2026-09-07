@@ -22,9 +22,14 @@ non-secret identifier, not a credential or a made-up receipt.
 | policy-set | `account`, `asset`, `policy`, `source_reference` |
 | preference-get | `account`; optional `key` |
 | preference-set | `account`, `key`, `value`, `source_reference` |
+| snapshot | `snapshot`, `reason`, `live:true` |
+| history | `account`; optional `limit` |
+| memory-summary | `account` |
 
 Output is `{ "ok": true, "result": ... }` on exit 0. Errors produce `ok:false`
 and exit 1. The CLI does not invoke Binance. The host performs native MCP calls.
+Snapshot history is auditable memory, not current Binance truth. Refresh live
+evidence for every current analysis or execution decision.
 
 ## Normalize captured MCP results
 

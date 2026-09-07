@@ -55,6 +55,31 @@ class PolicyTests(unittest.TestCase):
                 journal.approve(plan["hash"], data["account"], "message-4", now=NOW)
             journal.close()
 
+    def test_synthetic_snapshot_needs_explicit_live_gate_and_history_is_read_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Journal(str(Path(directory) / "state.sqlite"))
+            data = snapshot()
+            with self.assertRaisesRegex(SharewellError, "LIVE_SNAPSHOT_REQUIRED"):
+                journal.save_snapshot(data, "ANALYSIS", now=NOW)
+            saved = journal.save_snapshot(data, "ANALYSIS", live=True, now=NOW)
+            history = journal.history(data["account"], 1)
+            self.assertEqual(history["history"][0]["snapshot_hash"], saved["snapshot_hash"])
+            self.assertEqual(history["current_truth"], "LIVE_INPUT_REQUIRED")
+            self.assertEqual(journal.memory_summary(data["account"])["latest_snapshot"]["reason"], "ANALYSIS")
+            stale = deepcopy(data)
+            with self.assertRaisesRegex(SharewellError, "STALE_EVIDENCE"):
+                journal.save_snapshot(stale, "ANALYSIS", live=True, now=NOW + 60_001)
+            journal.close()
+
+    def test_new_tables_do_not_change_existing_journal_tables(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "state.sqlite")
+            journal = Journal(path)
+            names = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            self.assertTrue({"proposals", "orders", "asset_policies", "user_preferences",
+                             "portfolio_snapshots"} <= names)
+            journal.close()
+
 
 if __name__ == "__main__":
     unittest.main()

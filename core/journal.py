@@ -8,8 +8,11 @@ from .filters import validate_limit
 from .policies import account_key, normalize
 from .portfolio import analyze, target_differences
 from .rebalance import propose
-from .schemas import (ENDPOINT, ZERO, asset, canonical, decimal, fresh, integer,
+from .schemas import (ENDPOINT, ZERO, asset, canonical, decimal, digest, fresh, integer,
                       now_ms, require, validate_snapshot)
+
+
+SNAPSHOT_REASONS = {"ANALYSIS", "PRE_REBALANCE", "POST_REBALANCE"}
 
 
 def reference(value: object) -> str:
@@ -68,6 +71,11 @@ class Journal:
                 account TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
                 updated_at INTEGER NOT NULL, source_reference TEXT NOT NULL,
                 PRIMARY KEY(account, key));
+            CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                snapshot_hash TEXT PRIMARY KEY, account TEXT NOT NULL, observed_at INTEGER NOT NULL,
+                numeraire TEXT NOT NULL, reason TEXT NOT NULL, snapshot TEXT NOT NULL,
+                portfolio TEXT NOT NULL, portfolio_value TEXT, weights TEXT NOT NULL,
+                concentration TEXT NOT NULL, coverage TEXT NOT NULL, evidence TEXT NOT NULL);
         """)
 
     def close(self):
@@ -140,6 +148,45 @@ class Journal:
             self.db.execute("INSERT OR REPLACE INTO user_preferences VALUES (?, ?, ?, ?, ?)",
                             (account_ref, key, value, now, source_reference))
         return self.preference_get(account, key)
+
+    def save_snapshot(self, snapshot: dict, reason: str, *, live=False, now=None) -> dict:
+        now = now_ms() if now is None else now
+        require(type(live) is bool and live, "LIVE_SNAPSHOT_REQUIRED")
+        require(reason in SNAPSHOT_REASONS, "INVALID_SNAPSHOT_REASON")
+        validate_snapshot(snapshot, now)
+        report = analyze(snapshot, now)
+        snapshot_hash = digest({"reason": reason, "snapshot": snapshot})
+        weights = {row["asset"]: row["weight_pct"] for row in report["assets"]}
+        with self.transaction():
+            self.db.execute("INSERT OR IGNORE INTO portfolio_snapshots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (snapshot_hash, canonical(snapshot["account"]), snapshot["observed_at"],
+                             snapshot["numeraire"], reason, canonical(snapshot), canonical(report),
+                             report["total_value"], canonical(weights), canonical(report["concentration"]),
+                             report["coverage"], canonical(report["evidence"])))
+        return self._snapshot_row(snapshot_hash)
+
+    def _snapshot_row(self, snapshot_hash: str) -> dict:
+        row = self.db.execute("SELECT * FROM portfolio_snapshots WHERE snapshot_hash=?", (snapshot_hash,)).fetchone()
+        require(row is not None, "SNAPSHOT_NOT_FOUND")
+        result = dict(row)
+        for key in ("snapshot", "portfolio", "weights", "concentration", "evidence"):
+            result[key] = json.loads(result[key])
+        return result
+
+    def history(self, account: dict, limit: int = 50) -> dict:
+        account_ref = account_key(account)
+        require(type(limit) is int and 0 < limit <= 1000, "INVALID_HISTORY_LIMIT")
+        rows = self.db.execute("SELECT * FROM portfolio_snapshots WHERE account=? ORDER BY observed_at DESC, snapshot_hash DESC LIMIT ?",
+                               (account_ref, limit)).fetchall()
+        return {"account": account, "history": [self._snapshot_row(row["snapshot_hash"]) for row in rows],
+                "current_truth": "LIVE_INPUT_REQUIRED"}
+
+    def memory_summary(self, account: dict) -> dict:
+        history = self.history(account, 1)["history"]
+        return {"account": account, "policies": self.policy_get(account)["policies"],
+                "preferences": self.preference_get(account)["preferences"],
+                "latest_snapshot": history[0] if history else None,
+                "current_truth": "LIVE_INPUT_REQUIRED"}
 
     def _validate_policy_lock(self, plan: dict, snapshot: dict) -> None:
         generated = propose(snapshot, plan["targets"],

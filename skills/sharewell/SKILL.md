@@ -38,6 +38,12 @@ than being silently sold. Use `preference-get` and `preference-set` for the
 explicit `default_numeraire` preference. A current request `numeraire` overrides
 the stored preference for that analysis and does not change the preference.
 
+Use `snapshot` with `live:true` after a validated live capture to persist
+`ANALYSIS`, `PRE_REBALANCE` or `POST_REBALANCE` history. A fixture or other
+synthetic input must not be marked live. Use `history` and `memory-summary` for
+auditable memory; they are not current Binance truth. Refresh live evidence for
+every current analysis or execution decision.
+
 ## Connect and inspect
 
 1. Inspect the host's native MCP connections and tool schemas. Reuse the official

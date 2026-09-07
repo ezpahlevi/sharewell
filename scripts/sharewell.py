@@ -84,6 +84,12 @@ def run(operation: str, request: dict, state: str | None):
             return journal.preference_get(account, request.get("key"))
         if operation == "preference-set":
             return journal.preference_set(account, request["key"], request["value"], request["source_reference"])
+        if operation == "snapshot":
+            return journal.save_snapshot(request["snapshot"], request["reason"], live=request.get("live", False))
+        if operation == "history":
+            return journal.history(account, request.get("limit", 50))
+        if operation == "memory-summary":
+            return journal.memory_summary(account)
         if operation == "propose":
             snapshot = selected_snapshot(request, journal)
             policies = journal.policy_get(snapshot["account"])["policies"]
@@ -117,7 +123,7 @@ def run(operation: str, request: dict, state: str | None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["normalize", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "policy-get", "policy-set", "preference-get", "preference-set"])
+    parser.add_argument("operation", choices=["normalize", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "snapshot", "history", "memory-summary", "policy-get", "policy-set", "preference-get", "preference-set"])
     parser.add_argument("--input", required=True)
     parser.add_argument("--state")
     args = parser.parse_args()
