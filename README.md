@@ -74,8 +74,14 @@ against a malicious host bypassing the skill.
 
 Sharewell is Spot-only. It has no Futures, Margin, withdrawal, or autonomous
 background-trading path. Approval in Sharewell does not bypass Binance's native
-confirmation. Ambiguous submissions are queried by their stable client order ID,
-never blindly repeated.
+confirmation.
+
+Sharewell only accepts market and account evidence that is less than 60 seconds
+old, and refreshes balances, quotes, filters, and open orders again immediately
+before execution.
+
+Ambiguous submissions are queried by their stable client order ID and are never
+blindly repeated.
 
 ## Verification
 
