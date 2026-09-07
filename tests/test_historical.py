@@ -104,7 +104,7 @@ class HistoricalDataTests(unittest.TestCase):
                                 windows_days=[1])
 
     def test_incomplete_current_candle_is_not_used(self):
-        result = build_price_history([capture([row(99, "99"), row(100, "100")])], assets=["BTC"],
+        result = build_price_history([capture([row(99, "99"), row(100, "100")], end=101 * DAY)], assets=["BTC"],
                                      numeraire="USDT", as_of=101 * DAY, windows_days=[1])
         self.assertEqual([item["observed_at"] for item in result["price_history"]], [100 * DAY - 1])
         self.assertEqual(result["coverage"]["incomplete_assets"], ["BTC"])

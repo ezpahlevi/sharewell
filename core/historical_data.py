@@ -35,11 +35,20 @@ def _capture(capture):
     candles = capture.get("candles")
     require(isinstance(candles, list), "INVALID_NORMALIZED_KLINE")
     require(type(capture.get("complete")) is bool, "INVALID_KLINE_COMPLETENESS")
-    return source, symbol, list(dict.fromkeys(evidence)), candles, capture["complete"], observed_at
+    requested_start = capture.get("requested_start")
+    requested_end = capture.get("requested_end")
+    if requested_start is not None:
+        integer(requested_start, "requested_start")
+    if requested_end is not None:
+        integer(requested_end, "requested_end")
+    require(requested_start is None or requested_end is None or requested_start <= requested_end,
+            "INVALID_KLINE_RANGE")
+    return (source, symbol, list(dict.fromkeys(evidence)), candles, capture["complete"], observed_at,
+            requested_start, requested_end)
 
 
 def _points(capture, as_of):
-    source, symbol, evidence, candles, complete, observed_at = _capture(capture)
+    source, symbol, evidence, candles, complete, observed_at, requested_start, requested_end = _capture(capture)
     result = []
     seen = set()
     for candle in candles:
@@ -56,8 +65,13 @@ def _points(capture, as_of):
         if close_time <= min(as_of, observed_at):
             result.append((close_time, price))
     result.sort()
+    incomplete = False
+    if requested_start is not None:
+        incomplete = not result or result[0][0] > requested_start
+    if requested_end is not None:
+        incomplete = incomplete or not result or result[-1][0] < requested_end
     return {"source": source, "symbol": symbol, "evidence": evidence, "points": result,
-            "complete": complete}
+            "complete": complete, "incomplete": incomplete}
 
 
 def build_price_history(captures: list[dict], *, assets: list[str], numeraire: str,
@@ -92,7 +106,7 @@ def build_price_history(captures: list[dict], *, assets: list[str], numeraire: s
         item = matches[0]
         route = "DIRECT" if item["symbol"] == direct else "INVERSE"
         routes[name] = route
-        if not item["complete"]:
+        if item["incomplete"]:
             incomplete.add(name)
         evidence.extend(item["evidence"])
         timelines.extend(observed_at for observed_at, _ in item["points"])
