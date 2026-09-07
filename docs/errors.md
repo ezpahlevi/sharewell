@@ -127,6 +127,10 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `INVALID_EXECUTION_INPUT` | Execution evaluation input is malformed. |
 | `INCOMPLETE_EXECUTION_INPUT` | Execution evaluation lacks an authoritative receipt. |
 | `NUMERAIRE_MISMATCH` | Outcome inputs use different numeraires. |
+| `INVALID_LEARNED_PREFERENCES` | Learned preference input is malformed. |
+| `INVALID_LEARNED_PREFERENCE` | A learned preference row is malformed. |
+| `INVALID_ROUTE` | Route input is malformed. |
+| `INVALID_LEARNING_INPUT` | Learning input does not bind to the proposal. |
 
 ## Binance admission checks
 

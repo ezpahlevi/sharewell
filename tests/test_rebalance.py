@@ -3,6 +3,7 @@ from copy import deepcopy
 from decimal import Decimal
 
 from core.rebalance import propose
+from core.portfolio import Market
 from core.schemas import SharewellError, digest
 from fixtures import NOW, snapshot, symbol
 
@@ -97,6 +98,29 @@ class RebalanceTests(unittest.TestCase):
         self.assertGreaterEqual(len(plan["orders"]), 2)
         self.assertEqual([order["symbol"] for order in plan["orders"][:2]], ["BTCUSDT", "ETHUSDT"])
         self.assertNotIn("BTCETH", [order["symbol"] for order in plan["orders"]])
+
+    def test_route_learning_needs_three_observations_and_binds_context(self):
+        data = snapshot()
+        data["symbols"].extend([symbol("BTC", "BUSD"), symbol("ETH", "BUSD"), symbol("ETH", "USDT")])
+        data["quotes"].extend([
+            {"symbol": "BTCBUSD", "bidPrice": "99", "askPrice": "101", "observed_at": NOW},
+            {"symbol": "ETHBUSD", "bidPrice": "9", "askPrice": "11", "observed_at": NOW},
+            {"symbol": "ETHUSDT", "bidPrice": "9", "askPrice": "11", "observed_at": NOW}])
+        routes = list(Market(data).routes("BTC", "ETH"))
+        first, second = routes[0], routes[1]
+        low_sample = [{"key": "route_penalty:" + edge["symbol"],
+                       "value": {"penalty_bps": "100"}, "sample_count": 2} for edge in first]
+        low_sample.extend({"key": "route_penalty:" + edge["symbol"],
+                           "value": {"penalty_bps": "0"}, "sample_count": 2} for edge in second)
+        plan = self.plan(data, {"ETH": "100"}, learned_preferences=low_sample)
+        self.assertFalse(plan.get("learning_context"))
+        reliable = [{"key": "route_penalty:" + edge["symbol"],
+                     "value": {"penalty_bps": "100"}, "sample_count": 3} for edge in first]
+        reliable.extend({"key": "route_penalty:" + edge["symbol"],
+                         "value": {"penalty_bps": "0"}, "sample_count": 3} for edge in second)
+        plan = self.plan(data, {"ETH": "100"}, learned_preferences=reliable)
+        self.assertTrue(plan["learning_context"])
+        self.assertEqual(plan["learning_context"][0]["route"], [edge["symbol"] for edge in second])
 
 
 if __name__ == "__main__":

@@ -102,10 +102,12 @@ def run(operation: str, request: dict, state: str | None):
         if operation == "propose":
             snapshot = selected_snapshot(request, journal)
             policies = journal.policy_get(snapshot["account"])["policies"]
+            learned = journal.learned_get(snapshot["account"])["preferences"]
             plan = propose(snapshot, request["targets"],
                            fee_allowance_bps=request["fee_allowance_bps"],
                            slippage_bps=request["slippage_bps"],
-                           ttl_ms=request.get("ttl_ms", 120_000), policies=policies)
+                           ttl_ms=request.get("ttl_ms", 120_000), policies=policies,
+                           learned_preferences=learned)
             journal.save(plan, snapshot)
             return plan
         key = request["proposal_hash"]

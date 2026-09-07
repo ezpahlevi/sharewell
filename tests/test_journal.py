@@ -80,6 +80,7 @@ class JournalTests(unittest.TestCase):
         self.assertEqual(result["status"], "VERIFIED")
         self.assertTrue(result["actual_target_differences"])
         self.assertEqual(len(result["evaluation_runs"]), 2)
+        self.assertEqual(result["learned_preferences"][0]["sample_count"], 1)
 
     def test_commission_overrun_blocks_next_dispatch_and_is_reported(self):
         self.approve()

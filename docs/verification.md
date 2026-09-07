@@ -29,6 +29,12 @@ PRICE_RANGE validation is a pre-dispatch feasibility check. Binance recalculates
 
 The SQLite journal preserves proposal, approval, dispatch, receipt, fill, and balance evidence. An unresolved submission is queried by its persistent client order ID and is never blindly submitted again.
 
+The journal also persists explicitly gated portfolio snapshots, generic
+`evaluation_runs`, evaluator parameters and input hashes. Historical Market
+Performance is a registry evaluator with runtime windows and metrics. Verified
+execution outcomes may produce auditable route-learning observations, but
+learning cannot bypass policy, approval or execution safety.
+
 ## Validation commands
 
 Run from the plugin root:
@@ -41,7 +47,10 @@ python -B <skill-validator> skills/sharewell
 
 The OpenAI validators need PyYAML in their validation environment. Sharewell itself has no third-party runtime dependencies.
 
-The release-candidate source completed 68 tests. The plugin validator, canonical skill validator, production-source cleanliness check, and marketplace smoke test also passed before packaging. The ZIP extracted into a clean directory completed the same 68 tests and both validators.
+The release-candidate source completed 82 tests. The production-source
+cleanliness check, reproducible ZIP check, self-contained install smoke test
+and cwd-independent launcher test are part of that suite. No separate plugin
+or canonical skill validator executable is present in this checkout.
 
 ## Limits
 

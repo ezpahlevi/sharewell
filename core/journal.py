@@ -6,6 +6,7 @@ from fractions import Fraction
 
 from .filters import validate_limit
 from .evaluation import run_evaluator, run_profile
+from .learning import aggregate, observations_from_evaluation
 from .policies import account_key, normalize
 from .portfolio import analyze, target_differences
 from .rebalance import propose
@@ -83,6 +84,11 @@ class Journal:
                 input_hash TEXT NOT NULL, inputs TEXT NOT NULL, status TEXT NOT NULL,
                 metrics TEXT NOT NULL, evidence TEXT NOT NULL, score TEXT,
                 warnings TEXT NOT NULL, observations TEXT NOT NULL, created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS learned_preferences (
+                account TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+                sample_count INTEGER NOT NULL, evidence_count INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL, source_reference TEXT NOT NULL,
+                PRIMARY KEY(account, key));
         """)
 
     def close(self):
@@ -192,8 +198,36 @@ class Journal:
         history = self.history(account, 1)["history"]
         return {"account": account, "policies": self.policy_get(account)["policies"],
                 "preferences": self.preference_get(account)["preferences"],
+                "learned_preferences": self.learned_get(account)["preferences"],
                 "latest_snapshot": history[0] if history else None,
                 "current_truth": "LIVE_INPUT_REQUIRED"}
+
+    def learned_get(self, account: dict) -> dict:
+        account_ref = account_key(account)
+        rows = self.db.execute("SELECT key, value, sample_count, evidence_count, updated_at, source_reference FROM learned_preferences WHERE account=? ORDER BY key",
+                               (account_ref,)).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["value"] = json.loads(item["value"])
+            result.append(item)
+        return {"account": account, "preferences": result}
+
+    def _apply_learning(self, account: dict, proposal: dict, evaluation: dict, now: int) -> list[dict]:
+        observations = observations_from_evaluation(proposal, evaluation)
+        account_ref = account_key(account)
+        for observation in observations:
+            row = self.db.execute("SELECT value, sample_count, evidence_count FROM learned_preferences WHERE account=? AND key=?",
+                                  (account_ref, observation["key"])).fetchone()
+            old_value = json.loads(row["value"]) if row else None
+            old_count = row["sample_count"] if row else 0
+            value, sample_count, evidence_count = aggregate(old_value, old_count, observation)
+            previous_evidence = row["evidence_count"] if row else 0
+            source = "evaluation:" + observation["input_hash"]
+            self.db.execute("INSERT OR REPLACE INTO learned_preferences VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (account_ref, observation["key"], canonical(value), sample_count,
+                             previous_evidence + evidence_count, now, source))
+        return self.learned_get(account)["preferences"]
 
     def _save_evaluation(self, account: dict, result: dict, inputs: dict, created_at: int) -> dict:
         run_id = digest({"account": account, "evaluator_id": result["evaluator_id"],
@@ -234,7 +268,8 @@ class Journal:
                             fee_allowance_bps=plan["fee_allowance_bps"],
                             slippage_bps=plan["slippage_bps"], now=plan["created_at"],
                             ttl_ms=plan["expires_at"] - plan["created_at"],
-                            policies=self._policy_map(plan["account"]))
+                            policies=self._policy_map(plan["account"]),
+                            learned_preferences=plan.get("learning_preferences"))
         require(generated == plan, "POLICY_CHANGED")
 
     def save(self, proposal: dict, snapshot: dict) -> str:
@@ -242,7 +277,8 @@ class Journal:
                             fee_allowance_bps=proposal["fee_allowance_bps"],
                             slippage_bps=proposal["slippage_bps"], now=proposal["created_at"],
                             ttl_ms=proposal["expires_at"] - proposal["created_at"],
-                            policies=proposal.get("policy_context"))
+                            policies=proposal.get("policy_context"),
+                            learned_preferences=proposal.get("learning_preferences"))
         require(generated == proposal, "PROPOSAL_MISMATCH")
         with self.transaction():
             self.db.execute("INSERT OR IGNORE INTO proposals VALUES (?, ?, ?, ?, 'PROPOSED', NULL)",
@@ -392,10 +428,11 @@ class Journal:
             evaluation = run_profile("verification", evaluation_inputs)
             runs = [self._save_evaluation(plan["account"], item, evaluation_inputs, now)
                     for item in evaluation["results"]]
+            learned = self._apply_learning(plan["account"], plan, evaluation, now)
             result = {"status": "VERIFIED", "proposal_hash": proposal_hash, "portfolio": report,
                       "fee_reviews": fee_reviews(plan, orders),
                       "actual_target_differences": target_differences(report, plan["targets"]),
-                      "evaluations": evaluation, "evaluation_runs": runs}
+                      "evaluations": evaluation, "evaluation_runs": runs, "learned_preferences": learned}
             self.db.execute("UPDATE proposals SET state='VERIFIED' WHERE hash=?", (proposal_hash,))
         return result
 

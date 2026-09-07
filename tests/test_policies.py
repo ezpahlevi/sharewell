@@ -21,6 +21,16 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(plan["issues"][0]["reason"], "BLOCKED_ASSET")
         self.assertFalse(plan["execution_eligible"])
 
+    def test_learning_cannot_bypass_blocked_route_asset(self):
+        data = snapshot()
+        data["symbols"].append({**data["symbols"][0], "symbol": "BTCBUSD", "quoteAsset": "BUSD"})
+        data["quotes"].append({"symbol": "BTCBUSD", "bidPrice": "99", "askPrice": "101", "observed_at": NOW})
+        learned = [{"key": "route_penalty:BTCUSDT", "value": {"penalty_bps": "-100"}, "sample_count": 9}]
+        plan = propose(data, {"BTC": "0", "USDT": "100"}, fee_allowance_bps="10", slippage_bps="50",
+                       now=NOW, policies={"USDT": "BLOCK"}, learned_preferences=learned)
+        self.assertTrue(any(issue["reason"] == "BLOCKED_ASSET" for issue in plan["issues"]))
+        self.assertFalse(plan["orders"])
+
     def test_allowlist_preserves_unlisted_holdings(self):
         data = snapshot()
         before = deepcopy(data)

@@ -52,6 +52,12 @@ Verification records generic execution-quality and portfolio-outcome runs. A
 result with incomplete evidence is `PARTIAL` or `UNAVAILABLE`, not a fabricated
 metric.
 
+After verified interactions, Sharewell may aggregate execution observations in
+`learned_preferences`. Route penalties require at least three comparable
+observations and can only rank routes that are already executable. Learning
+cannot change hard policies, the approval gate, Spot-only limits or an approved
+proposal. There is no background polling or autonomous trading loop.
+
 ## Connect and inspect
 
 1. Inspect the host's native MCP connections and tool schemas. Reuse the official
