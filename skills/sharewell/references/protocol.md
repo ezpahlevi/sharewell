@@ -25,11 +25,13 @@ non-secret identifier, not a credential or a made-up receipt.
 | snapshot | `snapshot`, `reason`, `live:true` |
 | history | `account`; optional `limit` |
 | memory-summary | `account` |
+| evaluate | `account`, `inputs`, `evaluator_id` or `profile`; optional `parameters` |
 
 Output is `{ "ok": true, "result": ... }` on exit 0. Errors produce `ok:false`
 and exit 1. The CLI does not invoke Binance. The host performs native MCP calls.
-Snapshot history is auditable memory, not current Binance truth. Refresh live
-evidence for every current analysis or execution decision.
+Evaluation uses supplied evidence or explicit historical inputs and persists
+generic runs in the same journal. Profiles compose registered evaluators; they
+do not change policy, approval or execution requirements.
 
 ## Normalize captured MCP results
 

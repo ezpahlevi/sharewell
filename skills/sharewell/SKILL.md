@@ -44,6 +44,14 @@ synthetic input must not be marked live. Use `history` and `memory-summary` for
 auditable memory; they are not current Binance truth. Refresh live evidence for
 every current analysis or execution decision.
 
+Use `evaluate` for a registered evaluator or declarative profile. Evaluation
+results are auditable history, not current Binance truth. The built-in
+Historical Market Performance evaluator accepts explicit `price_history` and
+runtime windows/metrics; it is descriptive and never predicts or trades.
+Verification records generic execution-quality and portfolio-outcome runs. A
+result with incomplete evidence is `PARTIAL` or `UNAVAILABLE`, not a fabricated
+metric.
+
 ## Connect and inspect
 
 1. Inspect the host's native MCP connections and tool schemas. Reuse the official

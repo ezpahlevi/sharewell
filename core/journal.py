@@ -5,6 +5,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 from .filters import validate_limit
+from .evaluation import run_evaluator, run_profile
 from .policies import account_key, normalize
 from .portfolio import analyze, target_differences
 from .rebalance import propose
@@ -76,6 +77,12 @@ class Journal:
                 numeraire TEXT NOT NULL, reason TEXT NOT NULL, snapshot TEXT NOT NULL,
                 portfolio TEXT NOT NULL, portfolio_value TEXT, weights TEXT NOT NULL,
                 concentration TEXT NOT NULL, coverage TEXT NOT NULL, evidence TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS evaluation_runs (
+                run_id TEXT PRIMARY KEY, account TEXT NOT NULL, evaluator_id TEXT NOT NULL,
+                evaluator_version INTEGER NOT NULL, scope TEXT NOT NULL, parameters TEXT NOT NULL,
+                input_hash TEXT NOT NULL, inputs TEXT NOT NULL, status TEXT NOT NULL,
+                metrics TEXT NOT NULL, evidence TEXT NOT NULL, score TEXT,
+                warnings TEXT NOT NULL, observations TEXT NOT NULL, created_at INTEGER NOT NULL);
         """)
 
     def close(self):
@@ -187,6 +194,40 @@ class Journal:
                 "preferences": self.preference_get(account)["preferences"],
                 "latest_snapshot": history[0] if history else None,
                 "current_truth": "LIVE_INPUT_REQUIRED"}
+
+    def _save_evaluation(self, account: dict, result: dict, inputs: dict, created_at: int) -> dict:
+        run_id = digest({"account": account, "evaluator_id": result["evaluator_id"],
+                         "version": result["version"], "parameters": result["parameters"],
+                         "input_hash": result["input_hash"]})
+        self.db.execute("INSERT OR IGNORE INTO evaluation_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (run_id, account_key(account), result["evaluator_id"], result["version"],
+                         result["scope"], canonical(result["parameters"]), result["input_hash"],
+                         canonical(inputs), result["status"], canonical(result["metrics"]),
+                         canonical(result["evidence"]), result["score"], canonical(result["warnings"]),
+                         canonical(result["observations"]), created_at))
+        return self.evaluation_row(run_id)
+
+    def evaluation_row(self, run_id: str) -> dict:
+        row = self.db.execute("SELECT * FROM evaluation_runs WHERE run_id=?", (run_id,)).fetchone()
+        require(row is not None, "EVALUATION_NOT_FOUND")
+        result = dict(row)
+        for key in ("parameters", "inputs", "metrics", "evidence", "warnings", "observations"):
+            result[key] = json.loads(result[key])
+        return result
+
+    def evaluate(self, account: dict, inputs: dict, *, evaluator_id: str | None = None,
+                 parameters: dict | None = None, profile: str | None = None, now=None) -> dict:
+        now = now_ms() if now is None else now
+        require((evaluator_id is None) != (profile is None), "EVALUATION_SELECTOR_REQUIRED")
+        if profile is not None:
+            result = run_profile(profile, inputs, parameters)
+            results = result["results"]
+        else:
+            result = run_evaluator(evaluator_id, inputs, parameters)
+            results = [result]
+        with self.transaction():
+            runs = [self._save_evaluation(account, item, inputs, now) for item in results]
+        return {"result": result, "runs": runs}
 
     def _validate_policy_lock(self, plan: dict, snapshot: dict) -> None:
         generated = propose(snapshot, plan["targets"],
@@ -343,10 +384,18 @@ class Journal:
             require(snapshot["account"] == plan["account"], "FINAL_ACCOUNT_MISMATCH")
             orders = self.db.execute("SELECT * FROM orders WHERE proposal=? ORDER BY idx", (proposal_hash,)).fetchall()
             require(len(orders) == len(plan["orders"]) and all(o["state"] == "FILLED" for o in orders), "EXECUTION_INCOMPLETE")
-            self._reconcile(plan, json.loads(row["snapshot"]), orders, snapshot)
+            initial = json.loads(row["snapshot"])
+            self._reconcile(plan, initial, orders, snapshot)
+            evaluation_inputs = {"proposal": plan, "orders": [{"idx": order["idx"], "state": order["state"],
+                              "receipt": json.loads(order["receipt"])} for order in orders],
+                                 "initial_snapshot": initial, "final_snapshot": snapshot}
+            evaluation = run_profile("verification", evaluation_inputs)
+            runs = [self._save_evaluation(plan["account"], item, evaluation_inputs, now)
+                    for item in evaluation["results"]]
             result = {"status": "VERIFIED", "proposal_hash": proposal_hash, "portfolio": report,
                       "fee_reviews": fee_reviews(plan, orders),
-                      "actual_target_differences": target_differences(report, plan["targets"])}
+                      "actual_target_differences": target_differences(report, plan["targets"]),
+                      "evaluations": evaluation, "evaluation_runs": runs}
             self.db.execute("UPDATE proposals SET state='VERIFIED' WHERE hash=?", (proposal_hash,))
         return result
 

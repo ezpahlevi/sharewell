@@ -28,6 +28,12 @@ def account_from(request: dict):
     account = request.get("account")
     if account is None and isinstance(request.get("snapshot"), dict):
         account = request["snapshot"].get("account")
+    if account is None and isinstance(request.get("inputs"), dict):
+        for name in ("snapshot", "initial_snapshot", "final_snapshot"):
+            value = request["inputs"].get(name)
+            if isinstance(value, dict) and isinstance(value.get("account"), dict):
+                account = value["account"]
+                break
     return account
 
 
@@ -90,6 +96,9 @@ def run(operation: str, request: dict, state: str | None):
             return journal.history(account, request.get("limit", 50))
         if operation == "memory-summary":
             return journal.memory_summary(account)
+        if operation == "evaluate":
+            return journal.evaluate(account, request["inputs"], evaluator_id=request.get("evaluator_id"),
+                                    parameters=request.get("parameters"), profile=request.get("profile"))
         if operation == "propose":
             snapshot = selected_snapshot(request, journal)
             policies = journal.policy_get(snapshot["account"])["policies"]
@@ -123,7 +132,7 @@ def run(operation: str, request: dict, state: str | None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["normalize", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "snapshot", "history", "memory-summary", "policy-get", "policy-set", "preference-get", "preference-set"])
+    parser.add_argument("operation", choices=["normalize", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "snapshot", "history", "memory-summary", "evaluate", "policy-get", "policy-set", "preference-get", "preference-set"])
     parser.add_argument("--input", required=True)
     parser.add_argument("--state")
     args = parser.parse_args()

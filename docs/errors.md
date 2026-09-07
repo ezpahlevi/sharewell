@@ -97,6 +97,36 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `INVALID_SNAPSHOT_REASON` | Snapshot reason is unsupported. |
 | `SNAPSHOT_NOT_FOUND` | Persisted portfolio snapshot is missing. |
 | `INVALID_HISTORY_LIMIT` | History limit is outside the supported range. |
+| `INVALID_EVALUATOR_ID` | Evaluator ID is not stable identifier text. |
+| `INVALID_EVALUATOR_VERSION` | Evaluator version is not a positive integer. |
+| `INVALID_EVALUATOR_SCOPE` | Evaluator scope is missing or malformed. |
+| `INVALID_EVALUATOR_INPUTS` | Evaluator required inputs are malformed. |
+| `DUPLICATE_EVALUATOR_INPUT` | Evaluator required inputs repeat a name. |
+| `INVALID_EVALUATOR_CONTRACT` | Evaluator does not implement the required contract. |
+| `DUPLICATE_EVALUATOR` | Evaluator ID is already registered by another implementation. |
+| `UNKNOWN_EVALUATOR` | No evaluator is registered for the requested ID. |
+| `INVALID_EVALUATION_INPUT` | Evaluation input is not an object. |
+| `MISSING_EVALUATION_INPUT` | A declared evaluator input is absent. |
+| `INVALID_EVALUATION_PARAMETERS` | Evaluator parameters failed validation. |
+| `INVALID_EVALUATION_RESULT` | Evaluator result is not an object. |
+| `INVALID_EVALUATION_STATUS` | Evaluation status is unsupported. |
+| `INVALID_EVALUATION_METRICS` | Evaluation metrics are not an object. |
+| `INVALID_EVALUATION_EVIDENCE` | Evaluation evidence references are malformed. |
+| `INVALID_EVALUATION_WARNINGS` | Evaluation warnings are malformed. |
+| `INVALID_EVALUATION_OBSERVATIONS` | Evaluation observations are malformed. |
+| `INVALID_EVALUATION_SCORE` | Evaluation score is malformed. |
+| `FLOAT_EVALUATION_VALUE` | Evaluation data contains a binary float. |
+| `INVALID_EVALUATION_VALUE` | Evaluation data contains an unsupported value. |
+| `EVALUATION_NOT_FOUND` | Persisted evaluation run is missing. |
+| `EVALUATION_SELECTOR_REQUIRED` | Exactly one evaluator or profile is required. |
+| `UNKNOWN_PROFILE` | No evaluation profile is registered for the requested name. |
+| `INVALID_PROFILE` | Evaluation profile is malformed. |
+| `DUPLICATE_PROFILE` | Evaluation profile name is already registered. |
+| `INVALID_PROFILE_PARAMETERS` | Profile parameter overrides are malformed. |
+| `INVALID_PRICE_HISTORY` | Historical price input is malformed. |
+| `INVALID_EXECUTION_INPUT` | Execution evaluation input is malformed. |
+| `INCOMPLETE_EXECUTION_INPUT` | Execution evaluation lacks an authoritative receipt. |
+| `NUMERAIRE_MISMATCH` | Outcome inputs use different numeraires. |
 
 ## Binance admission checks
 
