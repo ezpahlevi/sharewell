@@ -31,11 +31,14 @@ The SQLite journal preserves proposal, approval, dispatch, receipt, fill, and ba
 
 The journal also persists explicitly gated portfolio snapshots, generic
 `evaluation_runs`, evaluator parameters and input hashes. Historical Market
-Performance is a registry evaluator with runtime windows and metrics over
-supplied validated price history only. Binance Agentic MCP Kline ingestion is
-not implemented or verified. Verified execution outcomes may produce auditable
-route-learning observations when a fresh initial quote touch is available, but
-learning cannot bypass policy, approval or execution safety.
+Performance is a registry evaluator with runtime windows, metrics and optional
+benchmarks over supplied validated price history only. The authenticated native
+`spot.klines` read was verified on 2026-09-07 with a small BTCUSDT `1d` sample;
+the response was a twelve-column Kline array and was accepted by the provider
+normalizer. No historical dataset was persisted from that live read. Verified
+execution outcomes may produce auditable route-learning observations when a
+fresh initial quote touch is available, but learning cannot bypass policy,
+approval or execution safety.
 
 ## Validation commands
 

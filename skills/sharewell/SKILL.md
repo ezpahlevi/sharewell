@@ -47,9 +47,35 @@ every current analysis or execution decision.
 Use `evaluate` for a registered evaluator or declarative profile. Evaluation
 results are auditable history, not current Binance truth. The built-in
 Historical Market Performance evaluator accepts explicit validated
-`price_history` and runtime windows/metrics; it is descriptive and never predicts
-or trades. Binance Agentic MCP Kline ingestion is not implemented or verified yet,
-so do not claim live historical Binance evaluation.
+`price_history` and runtime windows/metrics/benchmark; it is descriptive and
+never predicts or trades. The evaluator accepts supplied validated price
+history; Binance Agentic MCP Kline ingestion is implemented only through the
+host's verified `spot.klines` read, not inside the evaluator.
+
+For a user request such as "Evaluate my holdings over 3, 7, 14 and 30 days":
+
+1. Derive the requested assets and numeraire from the live portfolio context or
+   the explicit user request. Do not add default assets.
+2. Discover `spot.klines` in the current official catalog with `tool_search`.
+   Use `tool_execute` for the exact native name under META mode.
+3. Fetch the required Spot `1d` Klines with a small buffer beyond the largest
+   requested window. Capture the exact native result, requested pair and
+   interval, fresh observation time and actual host call reference.
+4. Run `historical-inputs` with those captures, the requested assets, numeraire,
+   as-of timestamp and runtime windows. It validates native rows, uses candle
+   closes, resolves direct/inverse pairs and returns `price_history` plus
+   coverage/evidence.
+5. Pass that result to the generic `evaluate` operation with
+   `evaluator_id:"historical_market_performance"` or a registered profile and
+   the requested runtime metrics/benchmark. The journal persists the generic
+   evaluation run.
+6. Explain the evidence, pair route and any `PARTIAL`/`UNAVAILABLE` coverage.
+   Never turn missing history into zero performance.
+
+The current native tool is read-only market data. Do not use UI Klines when
+standard Klines are required for evaluation, do not use Futures or direct REST,
+and do not claim live historical Binance evaluation unless the current native
+read and production normalizer both succeed.
 Verification records generic execution-quality and portfolio-outcome runs. A
 result with incomplete evidence is `PARTIAL` or `UNAVAILABLE`, not a fabricated
 metric.

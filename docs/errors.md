@@ -51,6 +51,29 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `MISSING_FIELD_MAP` | A row mapping omits required fields. |
 | `INVALID_ACCOUNT_MAP` | Agentic account mapping must contain `id` and `can_trade`. |
 | `INVALID_ACCOUNT_ID` | The authenticated account identifier is missing or invalid. |
+| `INVALID_KLINE_CAPTURE` | A native Spot Kline capture is malformed. |
+| `INVALID_KLINE_TOOL` | The capture is not from the verified Spot Kline tool. |
+| `INVALID_KLINE_INTERVAL` | The Kline interval is not in the native catalog. |
+| `INVALID_KLINE_PAYLOAD` | The native Kline result is not an array. |
+| `INVALID_KLINE_ROW` | A native Kline row does not have the expected shape. |
+| `INVALID_KLINE_TIME` | A Kline close time precedes its open time. |
+| `INVALID_KLINE_RANGE` | Kline bounds or requested history bounds are invalid. |
+| `DUPLICATE_KLINE_TIME` | A candle open time repeats in one captured history. |
+| `INVALID_HISTORICAL_ASSETS` | Requested historical assets are missing or malformed. |
+| `DUPLICATE_HISTORICAL_ASSET` | A requested historical asset repeats. |
+| `INVALID_HISTORICAL_WINDOWS` | Historical windows are not unique positive integers. |
+| `INVALID_HISTORICAL_CAPTURES` | Historical capture input is not an array. |
+| `INVALID_NORMALIZED_KLINE` | Normalized Kline data is malformed. |
+| `INVALID_HISTORICAL_SOURCE` | Normalized history lacks a source label. |
+| `UNSUPPORTED_HISTORICAL_INTERVAL` | Only daily Klines are supported by the day-window adapter. |
+| `INVALID_KLINE_COMPLETENESS` | Normalized history lacks a Boolean completeness flag. |
+| `MIXED_KLINE_METADATA` | A candle symbol or interval differs from its capture. |
+| `INVALID_KLINE_CLOSE` | A candle close is not a positive decimal string. |
+| `UNEXPECTED_HISTORICAL_SYMBOL` | A Kline pair is not requested for this numeraire. |
+| `DUPLICATE_HISTORICAL_PAIR` | More than one capture supplies the same Spot pair. |
+| `INVALID_BENCHMARK_HISTORY` | Portfolio benchmark history is malformed or lacks evidence. |
+| `DUPLICATE_BENCHMARK_HISTORY` | Portfolio benchmark timestamps repeat. |
+| `DUPLICATE_PRICE_HISTORY` | Historical price timestamps repeat for an asset. |
 
 ## Portfolio and proposal
 

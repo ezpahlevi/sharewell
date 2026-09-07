@@ -14,7 +14,8 @@ from core.policies import account_key
 from core.portfolio import analyze
 from core.rebalance import propose
 from core.schemas import SharewellError, canonical, digest, now_ms, require
-from providers.binance_mcp import bind_order, normalize_snapshot
+from core.historical_data import build_price_history
+from providers.binance_mcp import bind_order, normalize_kline_capture, normalize_snapshot
 
 
 def pairs(items):
@@ -72,6 +73,10 @@ def run(operation: str, request: dict, state: str | None):
     require(isinstance(request, dict), "INVALID_REQUEST")
     if operation == "normalize":
         return normalize_snapshot(request, now=now_ms())
+    if operation == "historical-inputs":
+        normalized = [normalize_kline_capture(capture, now=now_ms()) for capture in request.get("captures", [])]
+        return build_price_history(normalized, assets=request["assets"], numeraire=request["numeraire"],
+                                   as_of=request["as_of"], windows_days=request["windows_days"])
     if operation == "analyze":
         account = account_from(request)
         journal = Journal(state_path(state, request)) if account else None
@@ -135,7 +140,7 @@ def run(operation: str, request: dict, state: str | None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["normalize", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "snapshot", "history", "memory-summary", "evaluate", "policy-get", "policy-set", "preference-get", "preference-set"])
+    parser.add_argument("operation", choices=["normalize", "historical-inputs", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "snapshot", "history", "memory-summary", "evaluate", "policy-get", "policy-set", "preference-get", "preference-set"])
     parser.add_argument("--input", required=True)
     parser.add_argument("--state")
     args = parser.parse_args()

@@ -27,3 +27,11 @@ Final verification compares starting balances, authoritative order fills, commis
 Evaluation is a generic registry layer above evidence and below learning. The
 same journal stores evaluator inputs, hashes, parameters, versions, metrics and
 evidence in `evaluation_runs`; learned aggregate preferences are separate.
+
+Historical market data follows the same seam: the host discovers and calls the
+official Agentic MCP `spot.klines` read, the Binance provider validates the
+native twelve-column rows and evidence reference, and `core/historical_data.py`
+resolves direct or inverse Spot pairs into daily close `price_history`. The
+generic evaluator then calculates the requested runtime windows and metrics.
+No historical data acquisition is embedded in portfolio, rebalance, approval or
+execution modules.

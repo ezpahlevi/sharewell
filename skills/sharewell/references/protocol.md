@@ -10,6 +10,7 @@ non-secret identifier, not a credential or a made-up receipt.
 | Operation | Required request fields |
 | --- | --- |
 | normalize | `source`, `numeraire`, `captures` as described below; no journal required |
+| historical-inputs | `captures`, `assets`, `numeraire`, `as_of`, `windows_days`; no journal required |
 | analyze | `snapshot` |
 | propose | `snapshot`, `targets` (asset to percent string), `fee_allowance_bps`, `slippage_bps`; optional `ttl_ms` up to 300000 |
 | approve | `proposal_hash`, exact `account` object, `approval_ref` from user message |
@@ -30,10 +31,44 @@ non-secret identifier, not a credential or a made-up receipt.
 Output is `{ "ok": true, "result": ... }` on exit 0. Errors produce `ok:false`
 and exit 1. The CLI does not invoke Binance. The host performs native MCP calls.
 Evaluation uses supplied evidence or explicit historical inputs and persists
-generic runs in the same journal. Historical Market Performance accepts supplied
-validated price history; Binance Agentic MCP Kline ingestion is not implemented
-or verified yet. Profiles compose registered evaluators; they do not change
-policy, approval or execution requirements.
+generic runs in the same journal. Historical Market Performance accepts the
+validated `price_history` returned by `historical-inputs`. Profiles compose
+registered evaluators; they do not change policy, approval or execution
+requirements.
+
+## Native Spot Kline captures
+
+The verified official Agentic MCP market catalog exposes `spot.klines` in the
+`market` category. Its required input schema is:
+
+```text
+symbol: string
+interval: enum 1s, 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
+startTime: integer milliseconds, optional
+endTime: integer milliseconds, optional
+timeZone: string, optional
+limit: integer, optional, maximum 1000
+```
+
+The native result is an array of twelve-element arrays in this order:
+`open_time`, `open`, `high`, `low`, `close`, `volume`, `close_time`,
+`quote_volume`, `trades`, `taker_buy_volume`, `taker_buy_quote_volume`, and
+`ignore`. The catalog response did not provide a `readOnlyHint` annotation;
+the selected operation is a market-data read with `Security Type: NONE` in the
+host tool description and does not place orders.
+
+For each native call, the host writes a capture object with `source` equal to
+the official endpoint, `tool:"spot.klines"`, requested `symbol` and
+`interval`, fresh `observed_at`, an actual host `evidence` reference, and the
+native MCP result under `result`. Optional `requested_start` and
+`requested_end` let the provider mark coverage incomplete without inventing
+rows. `historical-inputs` calls the provider normalizer and then builds the
+evaluator input; it does not call Binance itself.
+
+Use daily `1d` captures for day windows. The adapter uses candle close values,
+supports `ASSET+NUMERAIRE` and `NUMERAIRE+ASSET` direct/inverse pairs, and
+reports missing pairs or incomplete coverage. It does not assume a stablecoin
+peg, use Futures data, synthesize candles, or perform multi-hop valuation.
 
 ## Normalize captured MCP results
 
