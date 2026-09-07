@@ -9,6 +9,8 @@ execution and reconciles fills with balances.
 
 Binance Agent OS Mini Hackathon · Track A — Agent Creation · Theme — Trading Workflows
 
+**Demo video:** [Watch Sharewell on YouTube (2:27)](https://youtu.be/Y1d_f8lcif0)
+
 The official Agentic OAuth connection, native Spot catalog, and authenticated
 read-only account flow were verified in Codex on 2026-09-07. The tested Agentic
 sub-account was empty, so no funded order was placed. See
@@ -26,7 +28,7 @@ codex plugin add sharewell@sharewell
 The plugin includes the official Binance Agent OS MCP endpoint. Complete Binance
 OAuth in the host, then ask: `Analyze my Binance Spot portfolio.` For a rebalance,
 provide exact target percentages and a slippage limit; Sharewell shows a proposal
-before any execution. Video status: pending.
+before any execution.
 
 Technical details: [judge guide](docs/judge-guide.md). Demo plan:
 [demo guide](docs/demo.md). Submission fields: [submission](docs/submission.md).
