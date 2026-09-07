@@ -9,7 +9,8 @@ def spot_symbol(row: dict) -> bool:
 
 
 class Market:
-    def __init__(self, snapshot: dict):
+    def __init__(self, snapshot: dict, blocked_assets=None):
+        self.blocked_assets = set(blocked_assets or ())
         self.symbols = {row["symbol"]: row for row in snapshot["symbols"] if spot_symbol(row)}
         self.quotes = {row["symbol"]: row for row in snapshot["quotes"]}
         self.edges: dict[str, list[dict]] = {}
@@ -23,6 +24,8 @@ class Market:
                 (symbol["baseAsset"], symbol["quoteAsset"], "SELL", bid, mid),
                 (symbol["quoteAsset"], symbol["baseAsset"], "BUY", ONE / ask, ONE / mid),
             ):
+                if source in self.blocked_assets or dest in self.blocked_assets:
+                    continue
                 self.edges.setdefault(source, []).append({"symbol": name, "source": source,
                     "dest": dest, "side": side, "rate": rate, "midrate": midrate})
 

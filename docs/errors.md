@@ -87,6 +87,12 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `PROPOSAL_LEG_LIMIT` | A proposal would exceed 256 order legs. |
 | `ORDER_EXCEEDS_BUDGET` | Rounded order cost exceeds its available source amount. |
 | `ROUTE_EXCEEDS_BALANCE` | A route consumes more free balance than available. |
+| `INVALID_POLICIES` | Asset policy input is not a supported map or list. |
+| `INVALID_POLICY` | An asset policy is not ALLOW or BLOCK. |
+| `INVALID_PREFERENCE` | A user preference key is unsupported. |
+| `POLICY_CHANGED` | Current hard policy differs from the proposed policy context. |
+| `ASSET_NOT_ALLOWED` | An asset is outside the configured allowlist. |
+| `BLOCKED_ASSET` | A blocked asset would need to change allocation. |
 
 ## Binance admission checks
 

@@ -26,6 +26,18 @@ sessions and hosts for that account. Never delete a journal to bypass a lock.
 `analyze` does not need `--state`. Every command exits; do not run a watcher.
 Read `references/protocol.md` before collecting inputs or calling the CLI.
 
+When `--state` is omitted and the request identifies an account, the runtime
+uses the account-hash path for that account. An explicit state path remains
+compatible for existing journals.
+
+Use `policy-get` and `policy-set` to inspect or change hard asset policies.
+Every mutation needs the actual user message reference as `source_reference`.
+BLOCK takes precedence over ALLOW. Policies never hide balances from analysis;
+blocked or unallowlisted assets remain visible and create residual issues rather
+than being silently sold. Use `preference-get` and `preference-set` for the
+explicit `default_numeraire` preference. A current request `numeraire` overrides
+the stored preference for that analysis and does not change the preference.
+
 ## Connect and inspect
 
 1. Inspect the host's native MCP connections and tool schemas. Reuse the official

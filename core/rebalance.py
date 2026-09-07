@@ -3,6 +3,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 from .filters import filter_map, multiple, validate_limit
+from .policies import conflict, context, normalize, tradable
 from .portfolio import Market, analyze, target_differences
 from .schemas import ONE, ZERO, SharewellError, decimal, digest, integer, now_ms, require, text
 
@@ -60,27 +61,34 @@ def _route(route: list[dict], budget: Decimal, market: Market, state: dict,
 
 
 def propose(snapshot: dict, targets: dict[str, str], *, fee_allowance_bps: str,
-            slippage_bps: str, now: int | None = None, ttl_ms: int = 120_000) -> dict:
+            slippage_bps: str, now: int | None = None, ttl_ms: int = 120_000,
+            policies=None) -> dict:
     now = now_ms() if now is None else now
     report = analyze(snapshot, now)
     differences = target_differences(report, targets)
+    policy_map = normalize(policies)
     fee = decimal(fee_allowance_bps) / 10_000
     slippage = decimal(slippage_bps) / 10_000
     require(ZERO <= fee < ONE and ZERO <= slippage < ONE, "INVALID_BPS")
     require(0 < integer(ttl_ms, "ttl_ms") <= 300_000, "INVALID_TTL")
-    market = Market(snapshot)
-    for name, percent in targets.items():
-        if decimal(percent):
-            market.path(name, snapshot["numeraire"])
+    valuation_market = Market(snapshot)
+    market = Market(snapshot, blocked_assets={name for name, policy in policy_map.items()
+                                              if policy == "BLOCK"})
     state = deepcopy(snapshot)
     balances = {row["asset"]: row for row in state["balances"]}
     current = {row["asset"]: Decimal(row["current_value"]) for row in differences}
     desired = {row["asset"]: Decimal(row["target_value"]) for row in differences}
-    prices = {name: market.rate(name, snapshot["numeraire"])
+    prices = {name: valuation_market.rate(name, snapshot["numeraire"])
               for name in current if current[name] or desired[name]}
     orders, issues = [], []
-    donors = sorted(name for name in current if current[name] > desired[name])
-    recipients = sorted(name for name in current if current[name] < desired[name])
+    policy_conflicts = []
+    for name in sorted(current):
+        issue = conflict(name, current[name], desired[name], policy_map)
+        if issue:
+            policy_conflicts.append(issue)
+    issues.extend(policy_conflicts)
+    donors = sorted(name for name in current if current[name] > desired[name] and tradable(name, policy_map))
+    recipients = sorted(name for name in current if current[name] < desired[name] and tradable(name, policy_map))
     for source in donors:
         for dest in recipients:
             while True:
@@ -109,13 +117,13 @@ def propose(snapshot: dict, targets: dict[str, str], *, fee_allowance_bps: str,
                 require(bool(legs) and len(orders) + len(legs) <= 256, "PROPOSAL_LEG_LIMIT")
                 for leg in legs:
                     name = leg["source_asset"]
-                    current[name] = current.get(name, ZERO) - Decimal(leg["source_reserve"]) * market.rate(name, snapshot["numeraire"])
+                    current[name] = current.get(name, ZERO) - Decimal(leg["source_reserve"]) * valuation_market.rate(name, snapshot["numeraire"])
                     name = leg["destination_asset"]
-                    current[name] = current.get(name, ZERO) + Decimal(leg["minimum_net_receive_estimate"]) * market.rate(name, snapshot["numeraire"])
+                    current[name] = current.get(name, ZERO) + Decimal(leg["minimum_net_receive_estimate"]) * valuation_market.rate(name, snapshot["numeraire"])
                     leg["index"] = len(orders)
                     leg["depends_on"] = len(orders) - 1 if orders else None
                     orders.append(leg)
-    proposal = {"version": 1, "account": deepcopy(snapshot["account"]),
+    proposal = {"version": 2 if policy_map else 1, "account": deepcopy(snapshot["account"]),
                 "created_at": now, "expires_at": now + ttl_ms, "numeraire": snapshot["numeraire"],
                 "snapshot_hash": digest(snapshot), "targets": deepcopy(targets),
                 "fee_allowance_bps": fee_allowance_bps, "slippage_bps": slippage_bps,
@@ -124,7 +132,9 @@ def propose(snapshot: dict, targets: dict[str, str], *, fee_allowance_bps: str,
                 "residual_value_differences": {name: text(desired.get(name, ZERO) - current[name])
                                                 for name in sorted(current)},
                 "execution_eligible": snapshot["account"]["kind"] == "AGENTIC"
-                                      and snapshot["account"]["can_trade"],
+                                      and snapshot["account"]["can_trade"] and not policy_conflicts,
                 "evidence": list(snapshot["evidence"])}
+    if policy_map:
+        proposal["policy_context"] = context(policy_map)
     proposal["hash"] = digest(proposal)
     return proposal

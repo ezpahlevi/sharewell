@@ -5,6 +5,7 @@ from decimal import Decimal
 from fractions import Fraction
 
 from .filters import validate_limit
+from .policies import account_key, normalize
 from .portfolio import analyze, target_differences
 from .rebalance import propose
 from .schemas import (ENDPOINT, ZERO, asset, canonical, decimal, fresh, integer,
@@ -59,6 +60,14 @@ class Journal:
                 proposal TEXT NOT NULL REFERENCES proposals(hash), idx INTEGER NOT NULL,
                 client_id TEXT NOT NULL UNIQUE, dispatched_at INTEGER NOT NULL,
                 state TEXT NOT NULL, receipt TEXT, PRIMARY KEY(proposal, idx));
+            CREATE TABLE IF NOT EXISTS asset_policies (
+                account TEXT NOT NULL, asset TEXT NOT NULL, policy TEXT NOT NULL,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                source_reference TEXT NOT NULL, PRIMARY KEY(account, asset));
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                account TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+                updated_at INTEGER NOT NULL, source_reference TEXT NOT NULL,
+                PRIMARY KEY(account, key));
         """)
 
     def close(self):
@@ -79,11 +88,73 @@ class Journal:
         require(row is not None, "UNKNOWN_PROPOSAL")
         return row
 
+    def _policy_map(self, account: dict) -> dict[str, str]:
+        key = account_key(account)
+        rows = self.db.execute("SELECT asset, policy FROM asset_policies WHERE account=? ORDER BY asset", (key,)).fetchall()
+        return normalize({row["asset"]: row["policy"] for row in rows})
+
+    def policy_get(self, account: dict) -> dict:
+        key = account_key(account)
+        rows = self.db.execute("SELECT asset, policy, created_at, updated_at, source_reference FROM asset_policies WHERE account=? ORDER BY asset", (key,)).fetchall()
+        return {"account": account, "policies": [dict(row) for row in rows]}
+
+    def policy_set(self, account: dict, name: str, policy: str, source_reference: str, *, now=None) -> dict:
+        now = now_ms() if now is None else now
+        account_ref = account_key(account)
+        asset(name)
+        require(policy in {"ALLOW", "BLOCK", "REMOVE"}, "INVALID_POLICY")
+        reference(source_reference)
+        with self.transaction():
+            if policy == "REMOVE":
+                self.db.execute("DELETE FROM asset_policies " + "WHERE account=? AND asset=?", (account_ref, name))
+            else:
+                existing = self.db.execute("SELECT created_at FROM asset_policies WHERE account=? AND asset=?",
+                                           (account_ref, name)).fetchone()
+                created = existing["created_at"] if existing else now
+                self.db.execute("INSERT OR REPLACE INTO asset_policies VALUES (?, ?, ?, ?, ?, ?)",
+                                (account_ref, name, policy, created, now, source_reference))
+        return self.policy_get(account)
+
+    def preference_get(self, account: dict, key: str | None = None) -> dict:
+        account_ref = account_key(account)
+        if key is None:
+            rows = self.db.execute("SELECT key, value, updated_at, source_reference FROM user_preferences WHERE account=? ORDER BY key",
+                                   (account_ref,)).fetchall()
+        else:
+            require(key == "default_numeraire", "INVALID_PREFERENCE")
+            rows = self.db.execute("SELECT key, value, updated_at, source_reference FROM user_preferences WHERE account=? AND key=?",
+                                   (account_ref, key)).fetchall()
+        return {"account": account, "preferences": [dict(row) for row in rows]}
+
+    def default_numeraire(self, account: dict):
+        rows = self.preference_get(account, "default_numeraire")["preferences"]
+        return rows[0]["value"] if rows else None
+
+    def preference_set(self, account: dict, key: str, value: str, source_reference: str, *, now=None) -> dict:
+        now = now_ms() if now is None else now
+        account_ref = account_key(account)
+        require(key == "default_numeraire", "INVALID_PREFERENCE")
+        asset(value)
+        reference(source_reference)
+        with self.transaction():
+            self.db.execute("INSERT OR REPLACE INTO user_preferences VALUES (?, ?, ?, ?, ?)",
+                            (account_ref, key, value, now, source_reference))
+        return self.preference_get(account, key)
+
+    def _validate_policy_lock(self, plan: dict, snapshot: dict) -> None:
+        generated = propose(snapshot, plan["targets"],
+                            fee_allowance_bps=plan["fee_allowance_bps"],
+                            slippage_bps=plan["slippage_bps"], now=plan["created_at"],
+                            ttl_ms=plan["expires_at"] - plan["created_at"],
+                            policies=self._policy_map(plan["account"]))
+        require(generated == plan, "POLICY_CHANGED")
+
     def save(self, proposal: dict, snapshot: dict) -> str:
         generated = propose(snapshot, proposal["targets"],
                             fee_allowance_bps=proposal["fee_allowance_bps"],
                             slippage_bps=proposal["slippage_bps"], now=proposal["created_at"],
-                            ttl_ms=proposal["expires_at"] - proposal["created_at"])
+                            ttl_ms=proposal["expires_at"] - proposal["created_at"],
+                            policies=proposal.get("policy_context"))
         require(generated == proposal, "PROPOSAL_MISMATCH")
         with self.transaction():
             self.db.execute("INSERT OR IGNORE INTO proposals VALUES (?, ?, ?, ?, 'PROPOSED', NULL)",
@@ -98,6 +169,7 @@ class Journal:
             plan = json.loads(row["proposal"])
             require(row["state"] == "PROPOSED", "INVALID_APPROVAL_STATE")
             require(plan["account"] == account, "APPROVAL_ACCOUNT_MISMATCH")
+            self._validate_policy_lock(plan, json.loads(row["snapshot"]))
             require(plan["created_at"] <= now < plan["expires_at"], "PROPOSAL_EXPIRED")
             require(plan["execution_eligible"] and bool(plan["orders"]), "NO_EXECUTABLE_ORDERS")
             active = self.db.execute("SELECT hash FROM proposals WHERE account=? AND state='APPROVED'", (row["account"],)).fetchone()
@@ -114,6 +186,7 @@ class Journal:
             require(row["state"] == "APPROVED", "APPROVAL_REQUIRED")
             require(plan["created_at"] <= now < plan["expires_at"], "PROPOSAL_EXPIRED")
             require(snapshot["account"] == plan["account"], "ACCOUNT_CHANGED")
+            self._validate_policy_lock(plan, json.loads(row["snapshot"]))
             previous = self.db.execute("SELECT * FROM orders WHERE proposal=? ORDER BY idx", (proposal_hash,)).fetchall()
             require(all(order["state"] == "FILLED" for order in previous),
                     "ORDER_UNRESOLVED")

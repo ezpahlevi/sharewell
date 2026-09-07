@@ -18,6 +18,10 @@ non-secret identifier, not a credential or a made-up receipt.
 | verify | `proposal_hash`, fresh `snapshot` |
 | stop | `proposal_hash`, fresh `snapshot` |
 | status | `proposal_hash` |
+| policy-get | `account` |
+| policy-set | `account`, `asset`, `policy`, `source_reference` |
+| preference-get | `account`; optional `key` |
+| preference-set | `account`, `key`, `value`, `source_reference` |
 
 Output is `{ "ok": true, "result": ... }` on exit 0. Errors produce `ok:false`
 and exit 1. The CLI does not invoke Binance. The host performs native MCP calls.
