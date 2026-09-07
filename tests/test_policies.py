@@ -1,13 +1,17 @@
+import os
 import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
+from unittest.mock import patch
 
 from core.journal import Journal
+from core.policies import account_key
 from core.portfolio import analyze
 from core.rebalance import propose
 from core.schemas import SharewellError
 from fixtures import NOW, snapshot
+from scripts.sharewell import default_state
 
 
 class PolicyTests(unittest.TestCase):
@@ -52,6 +56,29 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(reopened.policy_get(account)["policies"][0]["asset"], "BTC")
             self.assertEqual(reopened.default_numeraire(account), "BTC")
             reopened.close()
+
+    def test_can_trade_does_not_change_persistent_identity_or_safety_binding(self):
+        writable = snapshot()["account"]
+        readonly = {**writable, "can_trade": False}
+        self.assertEqual(account_key(writable), account_key(readonly))
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"LOCALAPPDATA": directory, "XDG_DATA_HOME": directory}):
+                self.assertEqual(default_state(writable), default_state(readonly))
+            path = str(Path(directory) / "state.sqlite")
+            journal = Journal(path)
+            data = snapshot()
+            journal.policy_set(writable, "BTC", "BLOCK", "message-identity", now=NOW)
+            journal.preference_set(writable, "default_numeraire", "BTC", "message-numeraire", now=NOW)
+            journal.save_snapshot(data, "ANALYSIS", live=True, now=NOW)
+            self.assertEqual(journal.policy_get(readonly)["policies"][0]["asset"], "BTC")
+            self.assertEqual(journal.default_numeraire(readonly), "BTC")
+            self.assertEqual(len(journal.history(readonly)["history"]), 1)
+            plan = propose(data, {"BTC": "75", "USDT": "25"}, fee_allowance_bps="10",
+                           slippage_bps="50", now=NOW)
+            journal.save(plan, data)
+            with self.assertRaisesRegex(SharewellError, "APPROVAL_ACCOUNT_MISMATCH"):
+                journal.approve(plan["hash"], readonly, "message-readonly", now=NOW)
+            journal.close()
 
     def test_policy_change_blocks_existing_proposal(self):
         with tempfile.TemporaryDirectory() as directory:

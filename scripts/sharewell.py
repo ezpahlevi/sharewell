@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.journal import Journal
+from core.policies import account_key
 from core.portfolio import analyze
 from core.rebalance import propose
 from core.schemas import SharewellError, canonical, digest, now_ms, require
@@ -45,7 +46,7 @@ def default_state(account: dict) -> str:
         root = Path.home() / "Library" / "Application Support"
     else:
         root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    target = root / "Sharewell" / "accounts" / digest(account) / "sharewell.sqlite3"
+    target = root / "Sharewell" / "accounts" / digest(account_key(account)) / "sharewell.sqlite3"
     target.parent.mkdir(parents=True, exist_ok=True)
     return str(target)
 

@@ -22,6 +22,8 @@ the same SQLite journal. A proposal that uses evaluation-derived learning must
 carry the relevant evaluator provenance in its immutable learning context.
 
 The built-in Historical Market Performance evaluator accepts `price_history`
-and runtime `windows_days` and `metrics` parameters. Its defaults are evaluator
-configuration, not Sharewell invariants. It does not predict prices or place
-orders.
+and runtime `windows_days` and `metrics` parameters. Its defaults are
+evaluator configuration, not Sharewell invariants. It evaluates only supplied
+validated price history. Binance Agentic MCP Kline ingestion is not implemented
+or verified, so Sharewell does not claim live historical Binance evaluation. It
+does not predict prices or place orders.

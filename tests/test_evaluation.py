@@ -68,6 +68,9 @@ class EvaluationTests(unittest.TestCase):
             inputs = {"value": "x", "evidence": ["synthetic-evidence"]}
             result = journal.evaluate(account, inputs, evaluator_id="test.contract", now=1_000_000)
             self.assertEqual(result["runs"][0]["evaluator_id"], "test.contract")
+            readonly = {**account, "can_trade": False}
+            second = journal.evaluate(readonly, inputs, evaluator_id="test.contract", now=1_000_001)
+            self.assertEqual(result["runs"][0]["run_id"], second["runs"][0]["run_id"])
             names = {row[0] for row in journal.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             self.assertIn("evaluation_runs", names)
             journal.close()

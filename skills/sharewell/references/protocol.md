@@ -30,8 +30,10 @@ non-secret identifier, not a credential or a made-up receipt.
 Output is `{ "ok": true, "result": ... }` on exit 0. Errors produce `ok:false`
 and exit 1. The CLI does not invoke Binance. The host performs native MCP calls.
 Evaluation uses supplied evidence or explicit historical inputs and persists
-generic runs in the same journal. Profiles compose registered evaluators; they
-do not change policy, approval or execution requirements.
+generic runs in the same journal. Historical Market Performance accepts supplied
+validated price history; Binance Agentic MCP Kline ingestion is not implemented
+or verified yet. Profiles compose registered evaluators; they do not change
+policy, approval or execution requirements.
 
 ## Normalize captured MCP results
 

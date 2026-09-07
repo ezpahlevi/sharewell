@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from core.learning import COMPARABLE_BASIS
 from core.portfolio import analyze, target_differences
 from core.schemas import SharewellError, decimal, require, text
 
@@ -17,7 +18,7 @@ def _evidence(inputs):
 
 class ExecutionQualityEvaluator:
     evaluator_id = "execution_quality"
-    version = 1
+    version = 2
     scope = "EXECUTION"
     required_inputs = ("proposal", "orders", "initial_snapshot", "final_snapshot")
 
@@ -48,18 +49,39 @@ class ExecutionQualityEvaluator:
             executed = decimal(receipt["executedQty"])
             quote = decimal(receipt["cummulativeQuoteQty"])
             average = text(quote / executed) if executed else None
+            reference = next((quote_row for quote_row in inputs["initial_snapshot"]["quotes"]
+                              if quote_row["symbol"] == planned["symbol"]), None)
+            reference_price = None
+            reference_observed_at = None
+            learning_eligible = False
+            if reference is not None:
+                reference_price = reference["askPrice"] if planned["side"] == "BUY" else reference["bidPrice"]
+                reference_observed_at = reference["observed_at"]
             slippage = None
-            if average is not None:
+            if average is not None and reference_price is not None:
                 average_value = Decimal(average)
-                limit = Decimal(planned["price"])
-                slippage = text((average_value / limit - 1) * 10_000 if planned["side"] == "BUY"
-                                else (limit / average_value - 1) * 10_000)
+                reference_value = Decimal(reference_price)
+                age = receipt["observed_at"] - reference_observed_at
+                if 0 <= age <= 60_000:
+                    slippage = text((average_value / reference_value - 1) * 10_000 if planned["side"] == "BUY"
+                                    else (reference_value / average_value - 1) * 10_000)
+                    learning_eligible = True
+                else:
+                    warnings.append("INCOMPARABLE_EXECUTION_COST")
+            elif average is not None:
+                warnings.append("INCOMPARABLE_EXECUTION_COST")
             for fill in receipt.get("fills", []):
                 name = fill["commissionAsset"]
                 commissions[name] = text(Decimal(commissions.get(name, "0")) + decimal(fill["commission"]))
                 timestamps.append(receipt["observed_at"])
             metrics.append({"index": index, "fill_state": status,
+                            "client_order_id": order.get("client_id"), "order_id": receipt["orderId"],
+                            "trade_ids": [str(fill["tradeId"]) for fill in receipt.get("fills", [])],
                             "planned_limit_price": planned["price"],
+                            "reference_price": reference_price,
+                            "reference_observed_at": reference_observed_at,
+                            "slippage_basis": COMPARABLE_BASIS if reference_price is not None else None,
+                            "learning_eligible": learning_eligible,
                             "actual_average_fill_price": average,
                             "realized_slippage_bps": slippage,
                             "expected_fee_allowance_bps": proposal["fee_allowance_bps"],

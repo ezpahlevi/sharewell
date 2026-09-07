@@ -129,8 +129,10 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `NUMERAIRE_MISMATCH` | Outcome inputs use different numeraires. |
 | `INVALID_LEARNED_PREFERENCES` | Learned preference input is malformed. |
 | `INVALID_LEARNED_PREFERENCE` | A learned preference row is malformed. |
+| `INVALID_LEARNED_VALUE` | A learned numeric value is not a finite signed decimal. |
 | `INVALID_ROUTE` | Route input is malformed. |
 | `INVALID_LEARNING_INPUT` | Learning input does not bind to the proposal. |
+| `INCOMPARABLE_EXECUTION_COST` | Execution lacks a fresh initial quote-touch reference. |
 
 ## Binance admission checks
 

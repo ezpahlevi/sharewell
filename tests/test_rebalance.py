@@ -1,8 +1,9 @@
 import unittest
 from copy import deepcopy
 from decimal import Decimal
+from types import SimpleNamespace
 
-from core.rebalance import propose
+from core.rebalance import _select_route, propose
 from core.portfolio import Market
 from core.schemas import SharewellError, digest
 from fixtures import NOW, snapshot, symbol
@@ -121,6 +122,45 @@ class RebalanceTests(unittest.TestCase):
         plan = self.plan(data, {"ETH": "100"}, learned_preferences=reliable)
         self.assertTrue(plan["learning_context"])
         self.assertEqual(plan["learning_context"][0]["route"], [edge["symbol"] for edge in second])
+
+    def route_candidates(self, first=None, second=None):
+        market = SimpleNamespace(quotes={
+            "A": {"bidPrice": "99", "askPrice": "101"},
+            "B": {"bidPrice": "99", "askPrice": "101"}})
+        return market, [
+            {"route": [{"symbol": "A"}], "learning": first, "selected": None},
+            {"route": [{"symbol": "B"}], "learning": second, "selected": None}]
+
+    def penalty(self, value, key):
+        return {"penalty_bps": Decimal(value), "observations": 3,
+                "keys": ["route_penalty:" + key]}
+
+    def test_unknown_route_is_neutral_against_bad_history(self):
+        market, candidates = self.route_candidates(second=self.penalty("25", "B"))
+        selected, context = _select_route(candidates, market, Decimal("0"))
+        self.assertIs(selected, candidates[0])
+        self.assertIsNone(context)
+
+    def test_good_history_can_beat_unknown_route(self):
+        market, candidates = self.route_candidates(second=self.penalty("-25", "B"))
+        selected, context = _select_route(candidates, market, Decimal("0"))
+        self.assertIs(selected, candidates[1])
+        self.assertEqual(context["baseline_route"], ["A"])
+        self.assertEqual(context["route"], ["B"])
+
+    def test_both_historical_routes_use_lower_penalty(self):
+        market, candidates = self.route_candidates(first=self.penalty("10", "A"),
+                                                   second=self.penalty("5", "B"))
+        selected, context = _select_route(candidates, market, Decimal("0"))
+        self.assertIs(selected, candidates[1])
+        self.assertEqual(context["preference_keys"], ["route_penalty:B"])
+
+    def test_avoiding_bad_history_emits_learning_context(self):
+        market, candidates = self.route_candidates(first=self.penalty("25", "A"))
+        selected, context = _select_route(candidates, market, Decimal("0"))
+        self.assertIs(selected, candidates[1])
+        self.assertEqual(context["historical_penalty_bps"], "25")
+        self.assertEqual(context["reason"], "AVOIDED_HIGHER_EXECUTION_COST")
 
 
 if __name__ == "__main__":

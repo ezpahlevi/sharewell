@@ -46,15 +46,18 @@ every current analysis or execution decision.
 
 Use `evaluate` for a registered evaluator or declarative profile. Evaluation
 results are auditable history, not current Binance truth. The built-in
-Historical Market Performance evaluator accepts explicit `price_history` and
-runtime windows/metrics; it is descriptive and never predicts or trades.
+Historical Market Performance evaluator accepts explicit validated
+`price_history` and runtime windows/metrics; it is descriptive and never predicts
+or trades. Binance Agentic MCP Kline ingestion is not implemented or verified yet,
+so do not claim live historical Binance evaluation.
 Verification records generic execution-quality and portfolio-outcome runs. A
 result with incomplete evidence is `PARTIAL` or `UNAVAILABLE`, not a fabricated
 metric.
 
 After verified interactions, Sharewell may aggregate execution observations in
-`learned_preferences`. Route penalties require at least three comparable
-observations and can only rank routes that are already executable. Learning
+`learned_preferences`. Route penalties require at least three observations with a
+fresh initial quote-touch reference and can only rank routes that are already
+executable. Learning
 cannot change hard policies, the approval gate, Spot-only limits or an approved
 proposal. There is no background polling or autonomous trading loop.
 

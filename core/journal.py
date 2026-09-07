@@ -89,10 +89,34 @@ class Journal:
                 sample_count INTEGER NOT NULL, evidence_count INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL, source_reference TEXT NOT NULL,
                 PRIMARY KEY(account, key));
+            CREATE TABLE IF NOT EXISTS learning_observations (
+                observation_id TEXT PRIMARY KEY, account TEXT NOT NULL, key TEXT NOT NULL,
+                value TEXT NOT NULL, evaluator_id TEXT NOT NULL, evaluator_version INTEGER NOT NULL,
+                parameters TEXT NOT NULL, input_hash TEXT NOT NULL, evidence TEXT NOT NULL,
+                created_at INTEGER NOT NULL);
+            CREATE INDEX IF NOT EXISTS learning_observations_account_key
+                ON learning_observations(account, key);
         """)
+        self._migrate_account_keys()
 
     def close(self):
         self.db.close()
+
+    def _migrate_account_keys(self):
+        tables = ("asset_policies", "user_preferences", "portfolio_snapshots",
+                  "evaluation_runs", "learned_preferences", "learning_observations")
+        with self.transaction():
+            for table in tables:
+                rows = self.db.execute("SELECT rowid, account FROM " + table).fetchall()
+                for row in rows:
+                    try:
+                        identity = json.loads(row["account"])
+                        stable = account_key(identity)
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        continue
+                    if stable != row["account"]:
+                        self.db.execute("UPDATE OR IGNORE " + table + " SET account=? WHERE rowid=?",
+                                        (stable, row["rowid"]))
 
     @contextmanager
     def transaction(self):
@@ -172,7 +196,7 @@ class Journal:
         weights = {row["asset"]: row["weight_pct"] for row in report["assets"]}
         with self.transaction():
             self.db.execute("INSERT OR IGNORE INTO portfolio_snapshots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                            (snapshot_hash, canonical(snapshot["account"]), snapshot["observed_at"],
+                            (snapshot_hash, account_key(snapshot["account"]), snapshot["observed_at"],
                              snapshot["numeraire"], reason, canonical(snapshot), canonical(report),
                              report["total_value"], canonical(weights), canonical(report["concentration"]),
                              report["coverage"], canonical(report["evidence"])))
@@ -217,20 +241,27 @@ class Journal:
         observations = observations_from_evaluation(proposal, evaluation)
         account_ref = account_key(account)
         for observation in observations:
+            inserted = self.db.execute("INSERT OR IGNORE INTO learning_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (observation["observation_id"], account_ref, observation["key"],
+                                        str(observation["value"]), observation["evaluator_id"],
+                                        observation["version"], canonical(observation["parameters"]),
+                                        observation["input_hash"], canonical(observation["evidence"]), now)).rowcount
+            if not inserted:
+                continue
             row = self.db.execute("SELECT value, sample_count, evidence_count FROM learned_preferences WHERE account=? AND key=?",
                                   (account_ref, observation["key"])).fetchone()
             old_value = json.loads(row["value"]) if row else None
             old_count = row["sample_count"] if row else 0
             value, sample_count, evidence_count = aggregate(old_value, old_count, observation)
             previous_evidence = row["evidence_count"] if row else 0
-            source = "evaluation:" + observation["input_hash"]
+            source = "observation:" + observation["observation_id"]
             self.db.execute("INSERT OR REPLACE INTO learned_preferences VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (account_ref, observation["key"], canonical(value), sample_count,
                              previous_evidence + evidence_count, now, source))
         return self.learned_get(account)["preferences"]
 
     def _save_evaluation(self, account: dict, result: dict, inputs: dict, created_at: int) -> dict:
-        run_id = digest({"account": account, "evaluator_id": result["evaluator_id"],
+        run_id = digest({"account": account_key(account), "evaluator_id": result["evaluator_id"],
                          "version": result["version"], "parameters": result["parameters"],
                          "input_hash": result["input_hash"]})
         self.db.execute("INSERT OR IGNORE INTO evaluation_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -423,6 +454,7 @@ class Journal:
             initial = json.loads(row["snapshot"])
             self._reconcile(plan, initial, orders, snapshot)
             evaluation_inputs = {"proposal": plan, "orders": [{"idx": order["idx"], "state": order["state"],
+                              "client_id": order["client_id"],
                               "receipt": json.loads(order["receipt"])} for order in orders],
                                  "initial_snapshot": initial, "final_snapshot": snapshot}
             evaluation = run_profile("verification", evaluation_inputs)

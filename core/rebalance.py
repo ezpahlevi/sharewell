@@ -71,25 +71,25 @@ def _route_base_score(route, market: Market, fee: Decimal):
 
 
 def _select_route(candidates, market: Market, fee: Decimal):
-    baseline = candidates[0]
-    if not any(item["learning"] is not None for item in candidates):
-        return baseline, None
+    base_score = lambda item: _route_base_score(item["route"], market, fee)
+    baseline = min(candidates, key=base_score)
     def score(item):
         penalty = item["learning"]
-        base = _route_base_score(item["route"], market, fee)
-        return base[:3] + (0 if penalty is not None else 1,
-                           penalty["penalty_bps"] if penalty is not None else ZERO,
-                           base[3])
+        base = base_score(item)
+        return base[:3] + (penalty["penalty_bps"] if penalty is not None else ZERO, base[3])
     selected = min(candidates, key=score)
-    baseline_penalty = baseline["learning"]
     selected_penalty = selected["learning"]
-    if (selected is baseline or baseline_penalty is None or selected_penalty is None or
-            selected_penalty["penalty_bps"] >= baseline_penalty["penalty_bps"]):
+    baseline_penalty = baseline["learning"]
+    if selected is baseline or (selected_penalty is None and baseline_penalty is None):
         return selected, None
+    source = selected_penalty or baseline_penalty
+    reason = "LOWER_OBSERVED_EXECUTION_COST" if selected_penalty is not None else "AVOIDED_HIGHER_EXECUTION_COST"
     learning = {"route": [edge["symbol"] for edge in selected["route"]],
-                "observations": selected_penalty["observations"],
-                "historical_penalty_bps": text(selected_penalty["penalty_bps"]),
-                "reason": "LOWER_OBSERVED_EXECUTION_COST"}
+                "baseline_route": [edge["symbol"] for edge in baseline["route"]],
+                "observations": source["observations"],
+                "historical_penalty_bps": text(source["penalty_bps"]),
+                "preference_keys": source["keys"],
+                "reason": reason}
     return selected, learning
 
 

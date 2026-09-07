@@ -1,4 +1,4 @@
-from .schemas import asset, canonical, require
+from .schemas import ENDPOINT, asset, canonical, require
 
 
 POLICY_VALUES = {"ALLOW", "BLOCK"}
@@ -6,7 +6,12 @@ POLICY_VALUES = {"ALLOW", "BLOCK"}
 
 def account_key(account: dict) -> str:
     require(isinstance(account, dict), "INVALID_ACCOUNT")
-    return canonical(account)
+    identity = {"source": ENDPOINT, "id": account.get("id"),
+                "kind": account.get("kind"), "wallet": account.get("wallet")}
+    require(isinstance(identity["id"], str) and identity["id"], "INVALID_ACCOUNT_ID")
+    require(identity["kind"] in ("AGENTIC", "MAIN_READ_ONLY"), "INVALID_ACCOUNT_KIND")
+    require(identity["wallet"] == "SPOT", "INVALID_WALLET")
+    return canonical(identity)
 
 
 def normalize(policies) -> dict[str, str]:
