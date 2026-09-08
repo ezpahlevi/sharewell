@@ -87,6 +87,8 @@ class PackagingTests(unittest.TestCase):
             package(first, roots[0])
             package(second, roots[1])
             self.assertEqual(first.read_bytes(), second.read_bytes())
+            with zipfile.ZipFile(first) as archive:
+                self.assertTrue(all(info.create_system == 3 for info in archive.infolist()))
 
     def test_repository_marketplace_registers_root_plugin(self):
         marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))

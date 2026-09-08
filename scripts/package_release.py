@@ -54,6 +54,7 @@ def package(destination: Path, root: Path = ROOT) -> dict:
             for name, data in sorted(entries.items()):
                 entry = zipfile.ZipInfo("sharewell/" + name, date_time=(2026, 1, 1, 0, 0, 0))
                 entry.compress_type = zipfile.ZIP_STORED
+                entry.create_system = 3
                 entry.external_attr = 0o644 << 16
                 archive.writestr(entry, data)
     return {"path": str(destination), "file_count": len(entries),

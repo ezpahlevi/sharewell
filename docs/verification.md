@@ -56,9 +56,9 @@ The OpenAI validators need PyYAML in their validation environment. Sharewell its
 The production-source cleanliness check, reproducible ZIP check, LF/CRLF source
 normalization check, self-contained install smoke test and cwd-independent
 launcher test are part of the full 111-test suite. The ZIP writer uses stored
-entries, fixes entry timestamps and permissions, and normalizes packaged text
-bytes before hashing, so Windows and Linux checkouts produce the same archive
-bytes. No separate plugin or
+entries, fixes Unix platform metadata, timestamps and permissions, and
+normalizes packaged text bytes before hashing, so Windows and Linux checkouts
+produce the same archive bytes. No separate plugin or
 canonical skill validator executable is present in this checkout.
 
 ## Limits
