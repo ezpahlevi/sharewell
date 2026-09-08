@@ -12,6 +12,13 @@ SUFFIXES = {".py", ".md", ".json", ".toml"}
 EXCLUDED = {"__pycache__", ".git", "state", "node_modules", ".venv", "runtime"}
 
 
+def _source_bytes(path: Path, relative: Path) -> bytes:
+    data = path.read_bytes()
+    if relative.as_posix() in ROOT_FILES or path.suffix in SUFFIXES:
+        return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return data
+
+
 def package(destination: Path, root: Path = ROOT) -> dict:
     root = root.resolve()
     destination = destination.resolve()
@@ -33,7 +40,7 @@ def package(destination: Path, root: Path = ROOT) -> dict:
             continue
         if not path.resolve().is_relative_to(root):
             raise ValueError("PATH_ESCAPE")
-        entries[relative.as_posix()] = path.read_bytes()
+        entries[relative.as_posix()] = _source_bytes(path, relative)
     required = {"README.md", ".mcp.json", "LICENSE", ".codex-plugin/plugin.json", ".claude-plugin/plugin.json",
                 "skills/sharewell/SKILL.md", "core/journal.py", "providers/binance_mcp.py"}
     if not required <= entries.keys():
@@ -43,10 +50,10 @@ def package(destination: Path, root: Path = ROOT) -> dict:
     entries["release-manifest.json"] = (json.dumps(release, indent=2, sort_keys=True) + "\n").encode()
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("xb") as stream:
-        with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_STORED) as archive:
             for name, data in sorted(entries.items()):
                 entry = zipfile.ZipInfo("sharewell/" + name, date_time=(2026, 1, 1, 0, 0, 0))
-                entry.compress_type = zipfile.ZIP_DEFLATED
+                entry.compress_type = zipfile.ZIP_STORED
                 entry.external_attr = 0o644 << 16
                 archive.writestr(entry, data)
     return {"path": str(destination), "file_count": len(entries),

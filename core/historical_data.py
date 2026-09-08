@@ -47,10 +47,11 @@ def _capture(capture):
             requested_start, requested_end)
 
 
-def _points(capture, as_of):
+def _points(capture, as_of, required_start):
     source, symbol, evidence, candles, complete, observed_at, requested_start, requested_end = _capture(capture)
     result = []
     seen = set()
+    cutoff = min(as_of, observed_at)
     for candle in candles:
         require(isinstance(candle, dict), "INVALID_NORMALIZED_CANDLE")
         require(candle.get("symbol") == symbol and candle.get("interval") == "1d",
@@ -62,14 +63,20 @@ def _points(capture, as_of):
         seen.add(open_time)
         price = candle.get("close")
         require(isinstance(price, str) and decimal(price) > 0, "INVALID_KLINE_CLOSE")
-        if close_time <= min(as_of, observed_at):
-            result.append((close_time, price))
+        if close_time <= cutoff:
+            result.append((open_time, close_time, price))
     result.sort()
-    incomplete = False
-    if requested_start is not None:
-        incomplete = not result or result[0][0] > requested_start
-    if requested_end is not None:
-        incomplete = incomplete or not result or result[-1][0] < requested_end
+    coverage_start = required_start if requested_start is None else requested_start
+    expected_last_open = ((cutoff + 1) // DAY_MS - 1) * DAY_MS
+    coverage_end = expected_last_open + DAY_MS - 1 if requested_end is None else requested_end
+    incomplete = not result
+    if result:
+        incomplete = incomplete or result[0][0] > coverage_start
+        incomplete = incomplete or result[-1][1] < coverage_end
+        for previous, current in zip(result, result[1:]):
+            gap_is_relevant = current[0] > coverage_start and previous[0] < coverage_end
+            if gap_is_relevant and current[0] - previous[0] != DAY_MS:
+                incomplete = True
     return {"source": source, "symbol": symbol, "evidence": evidence, "points": result,
             "complete": complete, "incomplete": incomplete}
 
@@ -79,12 +86,13 @@ def build_price_history(captures: list[dict], *, assets: list[str], numeraire: s
     names, numeraire, as_of, windows_days = _request(assets, numeraire, as_of, windows_days)
     require(isinstance(captures, list), "INVALID_HISTORICAL_CAPTURES")
     expected = {name: {name + numeraire, numeraire + name} for name in names if name != numeraire}
+    allowed_symbols = {symbol for values in expected.values() for symbol in values}
+    required_start = as_of - max(windows_days) * DAY_MS
     parsed = []
     seen_symbols = set()
     for capture in captures:
-        item = _points(capture, as_of)
-        require(item["symbol"] in {symbol for values in expected.values() for symbol in values},
-                "UNEXPECTED_HISTORICAL_SYMBOL")
+        item = _points(capture, as_of, required_start)
+        require(item["symbol"] in allowed_symbols, "UNEXPECTED_HISTORICAL_SYMBOL")
         require(item["symbol"] not in seen_symbols, "DUPLICATE_HISTORICAL_PAIR")
         seen_symbols.add(item["symbol"])
         parsed.append(item)
@@ -109,10 +117,10 @@ def build_price_history(captures: list[dict], *, assets: list[str], numeraire: s
         if item["incomplete"]:
             incomplete.add(name)
         evidence.extend(item["evidence"])
-        timelines.extend(observed_at for observed_at, _ in item["points"])
-        for observed_at, price in item["points"]:
+        timelines.extend(close_time for _, close_time, _ in item["points"])
+        for _, close_time, price in item["points"]:
             value = price if route == "DIRECT" else text(ONE / decimal(price))
-            by_asset[name].append({"asset": name, "observed_at": observed_at, "price": value})
+            by_asset[name].append({"asset": name, "observed_at": close_time, "price": value})
     if numeraire in names:
         for observed_at in sorted(set(timelines)):
             by_asset[numeraire].append({"asset": numeraire, "observed_at": observed_at, "price": "1"})
@@ -126,4 +134,4 @@ def build_price_history(captures: list[dict], *, assets: list[str], numeraire: s
             "evidence": list(dict.fromkeys(evidence)),
             "coverage": {"requested_assets": names, "available_assets": available,
                          "missing_assets": missing, "incomplete_assets": sorted(incomplete),
-                         "routes": routes, "required_start": as_of - max(windows_days) * DAY_MS}}
+                         "routes": routes, "required_start": required_start}}

@@ -40,7 +40,7 @@ def _base_metrics(window):
     values = [first[1]] + [point[1] for point in points if point[0] > first[0]]
     returns = [values[index] / values[index - 1] - 1 for index in range(1, len(values))]
     result = {"return": last[1] / first[1] - 1}
-    if returns:
+    if len(returns) >= 2:
         mean = sum(returns, Decimal(0)) / len(returns)
         result["volatility"] = (sum(((value - mean) ** 2 for value in returns), Decimal(0)) /
                                  len(returns)).sqrt()
@@ -135,6 +135,8 @@ class HistoricalMarketEvaluator:
                     continue
                 available_windows = True
                 values = _base_metrics(window)
+                if any(metric not in values for metric in parameters["metrics"] if metric != "relative_strength"):
+                    missing = True
                 returns.setdefault(days, {})[name] = values["return"]
                 windows[str(days)] = values
             output[name] = {"windows": windows}

@@ -109,6 +109,42 @@ class HistoricalDataTests(unittest.TestCase):
         self.assertEqual([item["observed_at"] for item in result["price_history"]], [100 * DAY - 1])
         self.assertEqual(result["coverage"]["incomplete_assets"], ["BTC"])
 
+    def test_closed_range_uses_candle_open_for_start_and_close_for_end(self):
+        first_open = 10 * DAY
+        last_close = 13 * DAY - 1
+        normalized = capture([row(10, "100"), row(11, "101"), row(12, "102")],
+                             start=first_open, end=last_close)
+        self.assertTrue(normalized["complete"])
+        result = build_price_history([normalized], assets=["BTC"], numeraire="USDT",
+                                     as_of=last_close, windows_days=[3])
+        self.assertEqual(result["coverage"]["incomplete_assets"], [])
+
+    def test_missing_middle_daily_candle_is_partial_coverage(self):
+        normalized = capture([row(1, "100"), row(2, "101"), row(5, "104"), row(6, "105")],
+                             start=DAY, end=7 * DAY - 1)
+        result = build_price_history([normalized], assets=["BTC"], numeraire="USDT",
+                                     as_of=7 * DAY, windows_days=[5])
+        self.assertEqual(result["coverage"]["incomplete_assets"], ["BTC"])
+        evaluation = run_evaluator("historical_market_performance", result,
+                                   {"windows_days": [5], "metrics": ["return"]})
+        self.assertEqual(evaluation["status"], "PARTIAL")
+        self.assertIn("INCOMPLETE_KLINE_HISTORY", evaluation["warnings"])
+
+    def test_missing_starting_daily_coverage_is_incomplete(self):
+        result = build_price_history([capture([row(3, "103"), row(4, "104")])],
+                                     assets=["BTC"], numeraire="USDT", as_of=5 * DAY, windows_days=[3])
+        self.assertEqual(result["coverage"]["incomplete_assets"], ["BTC"])
+
+    def test_current_candle_is_excluded_without_invalidating_closed_range(self):
+        first_open = 99 * DAY
+        last_close = 100 * DAY - 1
+        normalized = capture([row(99, "99"), row(100, "100")], start=first_open, end=last_close)
+        self.assertFalse(normalized["complete"])
+        result = build_price_history([normalized], assets=["BTC"], numeraire="USDT",
+                                     as_of=100 * DAY + 12 * 60 * 60 * 1000, windows_days=[1])
+        self.assertEqual(result["coverage"]["incomplete_assets"], [])
+        self.assertEqual([item["observed_at"] for item in result["price_history"]], [last_close])
+
     def test_identity_numeraire_is_not_a_stablecoin_conversion(self):
         result = build_price_history([capture([row(0, "100")])], assets=["BTC", "USDT"], numeraire="USDT",
                                      as_of=DAY, windows_days=[1])
@@ -140,6 +176,16 @@ class HistoricalEvaluatorTests(unittest.TestCase):
                               {"windows_days": [30], "metrics": ["return"]})
         self.assertEqual(result["status"], "UNAVAILABLE")
         self.assertEqual(result["metrics"]["assets"]["BTC"]["windows"], {})
+
+    def test_volatility_requires_two_return_observations(self):
+        inputs = self.history(2)
+        inputs["price_history"] = [row for row in inputs["price_history"] if row["asset"] == "BTC"]
+        result = run_evaluator("historical_market_performance", inputs,
+                               {"windows_days": [1], "metrics": ["return", "volatility"]})
+        window = result["metrics"]["assets"]["BTC"]["windows"]["1"]
+        self.assertIn("return", window)
+        self.assertNotIn("volatility", window)
+        self.assertEqual(result["status"], "PARTIAL")
 
     def test_named_benchmark_requires_supplied_history(self):
         result = run_evaluator("historical_market_performance", self.history(30),
