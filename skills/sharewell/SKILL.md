@@ -58,9 +58,11 @@ For a user request such as "Evaluate my holdings over 3, 7, 14 and 30 days":
    the explicit user request. Do not add default assets.
 2. Discover `spot.klines` in the current official catalog with `tool_search`.
    Use `tool_execute` for the exact native name under META mode.
-3. Fetch the required Spot `1d` Klines with a small buffer beyond the largest
-   requested window. Capture the exact native result, requested pair and
-   interval, fresh observation time and actual host call reference.
+3. Fetch the required Spot `1d` Klines with `timeZone:"0"` and a small buffer
+   beyond the largest requested window. Capture the exact native result,
+   requested pair and interval, explicit UTC timezone, fresh observation time
+   and actual host call reference. Sharewell historical day windows use
+   UTC-aligned Binance Spot `1d` candles; do not omit or replace this field.
 4. Run `historical-inputs` with those captures, the requested assets, numeraire,
    as-of timestamp and runtime windows. It validates native rows, uses candle
    closes, resolves direct/inverse pairs and returns `price_history` plus
@@ -74,8 +76,10 @@ For a user request such as "Evaluate my holdings over 3, 7, 14 and 30 days":
 
 The current native tool is read-only market data. Do not use UI Klines when
 standard Klines are required for evaluation, do not use Futures or direct REST,
-and do not claim live historical Binance evaluation unless the current native
-read and production normalizer both succeed.
+do not use custom Kline timezone evaluation, and do not let the host, local or
+user timezone alter historical results, and do not claim live historical Binance
+evaluation unless the current native read and production normalizer both
+succeed.
 Verification records generic execution-quality and portfolio-outcome runs. A
 result with incomplete evidence is `PARTIAL` or `UNAVAILABLE`, not a fabricated
 metric.

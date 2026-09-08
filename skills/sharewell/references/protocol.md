@@ -57,10 +57,19 @@ The native result is an array of twelve-element arrays in this order:
 the selected operation is a market-data read with `Security Type: NONE` in the
 host tool description and does not place orders.
 
+For historical day-window evaluation, the host must send `timeZone:"0"` on
+every `spot.klines` call, even though the native schema marks `timeZone`
+optional. Sharewell historical day windows use UTC-aligned Binance Spot `1d`
+candles. `startTime` and `endTime` remain Unix milliseconds interpreted in UTC;
+custom Binance Kline timezone evaluation is unsupported, and host, local or
+user timezone must not alter results.
+
 For each native call, the host writes a capture object with `source` equal to
 the official endpoint, `tool:"spot.klines"`, requested `symbol` and
-`interval`, fresh `observed_at`, an actual host `evidence` reference, and the
-native MCP result under `result`. Optional `requested_start` and
+`interval`, explicit `timeZone:"0"` for historical `1d` evaluation, fresh
+`observed_at`, an actual host `evidence` reference, and the native MCP result
+under `result`. The normalized capture preserves this as `time_zone:"0"`.
+Optional `requested_start` and
 `requested_end` let the provider mark coverage incomplete without inventing
 rows. `historical-inputs` calls the provider normalizer and then builds the
 evaluator input; it does not call Binance itself.

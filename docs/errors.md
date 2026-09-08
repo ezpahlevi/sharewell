@@ -54,6 +54,7 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `INVALID_KLINE_CAPTURE` | A native Spot Kline capture is malformed. |
 | `INVALID_KLINE_TOOL` | The capture is not from the verified Spot Kline tool. |
 | `INVALID_KLINE_INTERVAL` | The Kline interval is not in the native catalog. |
+| `UNSUPPORTED_HISTORICAL_TIMEZONE` | Historical daily Kline evidence is not explicitly UTC-aligned. |
 | `INVALID_KLINE_PAYLOAD` | The native Kline result is not an array. |
 | `INVALID_KLINE_ROW` | A native Kline row does not have the expected shape. |
 | `INVALID_KLINE_TIME` | A Kline close time precedes its open time. |

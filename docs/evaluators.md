@@ -35,6 +35,9 @@ The Binance provider accepts native Spot `spot.klines` captures from the
 official Agentic MCP endpoint and preserves their host evidence reference.
 `historical-inputs` normalizes the native rows, uses daily candle closes, and
 builds provider-independent `price_history` for the requested assets and
-numeraire. The evaluator accepts supplied validated price history; Binance
+numeraire. Historical day windows use UTC-aligned Binance Spot `1d` candles;
+the host must send `timeZone:"0"`, and the normalized capture preserves
+`time_zone:"0"`. `startTime` and `endTime` remain Unix milliseconds in UTC.
+Custom Kline timezone evaluation is unsupported. The evaluator accepts supplied validated price history; Binance
 Agentic MCP Kline ingestion is now implemented and live-read verified for the
 native tool, but no background historical collection is performed.

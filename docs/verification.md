@@ -35,7 +35,10 @@ Performance is a registry evaluator with runtime windows, metrics and optional
 benchmarks over supplied validated price history only. The host obtains native
 Spot Klines through `spot.klines`, the Binance provider normalizes the captured
 evidence, and the provider-independent historical adapter builds close-price
-inputs. The evaluator does not retrieve Binance data itself. The live Kline
+inputs. Historical day windows use UTC-aligned Binance Spot `1d` candles; every
+host call sends `timeZone:"0"`, and non-UTC or omitted timezone metadata is
+rejected. `startTime` and `endTime` remain Unix milliseconds in UTC. Custom
+Kline timezone evaluation is unsupported. The evaluator does not retrieve Binance data itself. The live Kline
 read was verified on 2026-09-07 with a small BTCUSDT `1d` sample; no broad live
 historical dataset was claimed or persisted. Verified execution outcomes may
 produce auditable route-learning observations when a fresh initial quote touch
@@ -55,7 +58,7 @@ The OpenAI validators need PyYAML in their validation environment. Sharewell its
 
 The production-source cleanliness check, reproducible ZIP check, LF/CRLF source
 normalization check, self-contained install smoke test and cwd-independent
-launcher test are part of the full 111-test suite. The ZIP writer uses stored
+launcher test are part of the full 113-test suite. The ZIP writer uses stored
 entries, fixes Unix platform metadata, timestamps and permissions, and
 normalizes packaged text bytes before hashing, so Windows and Linux checkouts
 produce the same archive bytes. No separate plugin or

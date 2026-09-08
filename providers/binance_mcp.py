@@ -93,6 +93,8 @@ def normalize_kline_capture(capture: dict, *, now: int) -> dict:
     symbol = asset(capture.get("symbol"))
     interval = capture.get("interval")
     require(interval in KLINE_INTERVALS, "INVALID_KLINE_INTERVAL")
+    if interval == "1d":
+        require(capture.get("timeZone") == "0", "UNSUPPORTED_HISTORICAL_TIMEZONE")
     evidence = capture.get("evidence")
     require(isinstance(evidence, str) and 0 < len(evidence) <= 200, "INVALID_EVIDENCE")
     observed_at = capture.get("observed_at")
@@ -141,6 +143,8 @@ def normalize_kline_capture(capture: dict, *, now: int) -> dict:
     result = {"source": ENDPOINT, "tool": capture["tool"], "symbol": symbol, "interval": interval,
               "observed_at": observed_at, "evidence": evidence, "candles": candles,
               "complete": complete}
+    if interval == "1d":
+        result["time_zone"] = "0"
     if requested_start is not None:
         result["requested_start"] = requested_start
     if requested_end is not None:

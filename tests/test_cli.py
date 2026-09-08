@@ -70,7 +70,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             day = 86_400_000
             request = {"captures": [{"source": ENDPOINT, "tool": "spot.klines", "symbol": "BTCUSDT",
-                                      "interval": "1d", "observed_at": now_ms(),
+                                      "interval": "1d", "timeZone": "0", "observed_at": now_ms(),
                                       "evidence": "synthetic-kline-cli", "result": {
                                           "isError": False, "content": [{"type": "text", "text": json.dumps([
                                               [0, "100.00", "100.00", "100.00", "100.00", "1.00", day - 1,

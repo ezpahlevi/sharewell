@@ -29,6 +29,7 @@ def row(day, close, *, symbol="BTCUSDT", interval="1d"):
 
 def capture(rows, *, symbol="BTCUSDT", interval="1d", start=None, end=None, evidence="mcp-kline-1"):
     result = {"source": ENDPOINT, "tool": "spot.klines", "symbol": symbol, "interval": interval,
+              "timeZone": "0",
               "observed_at": CAPTURED_AT, "evidence": evidence, "result": native(rows)}
     if start is not None:
         result["requested_start"] = start
@@ -45,6 +46,7 @@ class HistoricalProviderTests(unittest.TestCase):
         self.assertEqual(result["candles"][2]["volume"], "1.2300")
         self.assertEqual(result["symbol"], "BTCUSDT")
         self.assertEqual(result["interval"], "1d")
+        self.assertEqual(result["time_zone"], "0")
         self.assertEqual(result["evidence"], "mcp-kline-1")
 
     def test_malformed_duplicate_and_error_rows_fail(self):
@@ -57,6 +59,7 @@ class HistoricalProviderTests(unittest.TestCase):
             with self.subTest(rows=rows), self.assertRaises(SharewellError):
                 capture(rows)
         request = {"source": ENDPOINT, "tool": "spot.klines", "symbol": "BTCUSDT", "interval": "1d",
+                   "timeZone": "0",
                    "observed_at": CAPTURED_AT, "evidence": "mcp-kline-error", "result": native([], error=True)}
         with self.assertRaises(SharewellError):
             normalize_kline_capture(request, now=CAPTURED_AT)
@@ -68,13 +71,30 @@ class HistoricalProviderTests(unittest.TestCase):
     def test_source_tool_symbol_and_interval_are_strict(self):
         for key, value in (("source", "https://example.com"), ("tool", "spot.uiKlines")):
             request = {"source": ENDPOINT, "tool": "spot.klines", "symbol": "BTCUSDT", "interval": "1d",
+                       "timeZone": "0",
                        "observed_at": CAPTURED_AT, "evidence": "mcp-kline-strict", "result": native([row(0, "100")])}
             request[key] = value
             with self.subTest(key=key), self.assertRaises(SharewellError):
                 normalize_kline_capture(request, now=CAPTURED_AT)
 
+    def test_daily_capture_requires_explicit_utc_timezone(self):
+        for timezone in ("8", None):
+            request = {"source": ENDPOINT, "tool": "spot.klines", "symbol": "BTCUSDT", "interval": "1d",
+                       "observed_at": CAPTURED_AT, "evidence": "mcp-kline-timezone", "result": native([row(0, "100")])}
+            if timezone is not None:
+                request["timeZone"] = timezone
+            with self.subTest(timezone=timezone), self.assertRaisesRegex(SharewellError,
+                                                                           "UNSUPPORTED_HISTORICAL_TIMEZONE"):
+                normalize_kline_capture(request, now=CAPTURED_AT)
+
 
 class HistoricalDataTests(unittest.TestCase):
+    def test_historical_data_requires_utc_capture_metadata(self):
+        normalized = capture([row(0, "100"), row(1, "101")])
+        del normalized["time_zone"]
+        with self.assertRaisesRegex(SharewellError, "UNSUPPORTED_HISTORICAL_TIMEZONE"):
+            build_price_history([normalized], assets=["BTC"], numeraire="USDT", as_of=2 * DAY, windows_days=[1])
+
     def test_direct_pair_builds_close_price_history(self):
         result = build_price_history([capture([row(0, "100.00"), row(1, "110.00")])],
                                      assets=["BTC"], numeraire="USDT", as_of=2 * DAY,

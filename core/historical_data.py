@@ -25,6 +25,7 @@ def _capture(capture):
     require(isinstance(source, str) and 0 < len(source) <= 200, "INVALID_HISTORICAL_SOURCE")
     symbol = asset(capture.get("symbol"))
     require(capture.get("interval") == "1d", "UNSUPPORTED_HISTORICAL_INTERVAL")
+    require(capture.get("time_zone") == "0", "UNSUPPORTED_HISTORICAL_TIMEZONE")
     evidence = capture.get("evidence")
     if isinstance(evidence, str):
         evidence = [evidence]
