@@ -121,6 +121,10 @@ Implementation details: [architecture](docs/architecture.md),
 [Binance MCP](docs/binance-mcp.md), [error codes](docs/errors.md), and
 [development](docs/development.md).
 
+## Roadmap
+
+Post-judging: [Portfolio-Specific News Intelligence & Catalyst Risk Overlay](docs/future-news-intelligence.md)
+
 ## Development checks
 
 ```text
