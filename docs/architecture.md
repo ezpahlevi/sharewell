@@ -3,13 +3,13 @@
 Sharewell keeps conversation and Binance access in the AI host. The Python core receives captured MCP results as JSON, validates them, calculates portfolio state and proposals, and records approval and execution state in SQLite.
 
 ```text
-Codex / Claude / Cursor / compatible host
-        | native MCP calls and user confirmation
-Official Binance Agentic MCP
-
-AI host
-        | finite JSON files
-Sharewell core and SQLite journal
+Official Binance MCP evidence
+        → provider normalization
+        → portfolio/history/evaluation
+        → learning/recommendation
+        → proposal
+        → approval
+        → execution/reconciliation
 ```
 
 The core has no network transport, credential storage, dashboard, custom LLM, scheduler, futures, margin, withdrawal, or autonomous trading path. Thin adapters package the same skill and runtime for different hosts.
@@ -33,5 +33,7 @@ official Agentic MCP `spot.klines` read, the Binance provider validates the
 native twelve-column rows and evidence reference, and `core/historical_data.py`
 resolves direct or inverse Spot pairs into daily close `price_history`. The
 generic evaluator then calculates the requested runtime windows and metrics.
+Historical daily evaluation uses explicitly UTC-aligned Spot `1d` Klines with
+`timeZone: "0"`; host or local timezone does not change the result.
 No historical data acquisition is embedded in portfolio, rebalance, approval or
 execution modules.

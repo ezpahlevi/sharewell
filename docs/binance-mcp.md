@@ -43,12 +43,28 @@ The authenticated Binance Agentic catalog exposed these required Spot tools:
 | Reference-price method | `spot.referencePriceCalculation` |
 | Best bid and ask | `spot.tickerBookTicker` |
 | 24-hour ticker | `spot.ticker24hr` |
+| Historical Spot Klines | `spot.klines` |
 | Account commission | `spot.accountCommission` |
 | New Spot order | `spot.newOrder` |
 | Order lookup | `spot.getOrder` |
 | Account fills | `spot.myTrades` |
 
 Use `tool_search` with categories `account`, `general`, `market`, and `trade`. When a required tool is hidden, invoke `tool_execute` with its exact `toolName` and schema-matching `arguments`.
+
+## Historical Spot Klines
+
+The verified read-only historical market capability is `spot.klines`. The host
+must rediscover its current native schema before use. For Sharewell historical
+day-window evaluation, the captured call includes the requested Spot `symbol`,
+`interval: "1d"`, `timeZone: "0"`, and Unix-millisecond UTC `startTime` and
+`endTime`. Native twelve-column Kline rows are retained as evidence and
+normalized by the Binance provider before the generic evaluator consumes daily
+candle closes.
+
+Historical day windows use UTC-aligned Binance Spot `1d` candles. Custom Binance
+Kline timezone evaluation is unsupported, and host, local, or user timezone must
+not alter the result. Sharewell has no direct REST, Futures Kline, or UI-Kline
+fallback.
 
 The observed `spot.getAccount` response supplies `uid`, `accountType`, `canTrade`, `balances`, and `permissions`. Normalize account identity from `/uid` and permission from `/canTrade`. Sharewell sets account kind to `AGENTIC` from the authenticated Agentic endpoint and wallet to `SPOT` from the Spot operation. It converts the numeric UID to a string before hashing or journaling.
 
