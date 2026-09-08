@@ -1,15 +1,20 @@
 # Sharewell
 
-Analyze and rebalance a Binance Spot portfolio through chat. Your AI host handles
-conversation and the official Binance MCP connection; Sharewell computes values,
-allocation differences and bounded order proposals, then journals approved
-execution and reconciles fills with balances.
+Sharewell is a conversational Binance Spot portfolio agent for live portfolio
+analysis, adaptive evaluation, and explicitly approved rebalancing through the
+official Binance Agent OS MCP. The host supplies authenticated evidence and
+native confirmation; Sharewell computes deterministic results and preserves an
+auditable journal.
 
 [![Sharewell checks](https://github.com/ezpahlevi/sharewell/actions/workflows/ci.yml/badge.svg)](https://github.com/ezpahlevi/sharewell/actions/workflows/ci.yml)
 
 Binance Agent OS Mini Hackathon · Track A — Agent Creation · Theme — Trading Workflows
 
 **Demo video:** [Watch Sharewell on YouTube (2:27)](https://youtu.be/Y1d_f8lcif0)
+
+The current 2:27 demo focuses on the core analysis and approved-rebalancing
+workflow. It does not claim to visually demonstrate every adaptive V2 capability
+implemented in the repository.
 
 The official Agentic OAuth connection, native Spot catalog, and authenticated
 read-only account flow were verified in Codex on 2026-09-07. The tested Agentic
@@ -30,8 +35,24 @@ OAuth in the host, then ask: `Analyze my Binance Spot portfolio.` For a rebalanc
 provide exact target percentages and a slippage limit; Sharewell shows a proposal
 before any execution.
 
+For historical evaluation, ask: `Evaluate BTC, ETH and SOL over 3, 7, 14 and 30 days.`
+
 Technical details: [judge guide](docs/judge-guide.md). Demo plan:
 [demo guide](docs/demo.md). Submission fields: [submission](docs/submission.md).
+
+## Adaptive portfolio intelligence
+
+- Persistent account-scoped asset allowlist/blocklist and portfolio snapshot memory.
+- Multi-numeraire analysis and a generic extensible evaluator framework.
+- Binance Spot historical Kline evaluation with configurable windows; the default
+  windows are 3, 7, 14 and 30 days.
+- Runtime-selectable return, volatility, max drawdown and relative strength
+  metrics, plus verified-outcome execution-quality learning.
+- Historical daily candles are explicitly aligned to UTC.
+
+Historical evaluation and learning may inform warnings and recommendations, but
+cannot silently change explicit user targets, hard asset policies, approval,
+Binance confirmation or Spot-only safety.
 
 ## Install
 

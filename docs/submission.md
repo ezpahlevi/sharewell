@@ -14,27 +14,32 @@ Trading Workflows
 
 ## Project description
 
-Sharewell turns Binance Spot rebalancing into a reviewable conversation. Instead
-of manually checking balances, calculating weights, finding valid pairs, applying
-filters and fees, and monitoring fills, a user asks Sharewell to inspect the
-portfolio. Sharewell reads live account and market evidence through the official
-Binance Agent OS MCP, calculates exposure and target allocation drift, and presents
-a bounded rebalance proposal with routes, quantities, prices, fees, residuals, and
-expiry. The user can modify or explicitly approve that proposal. The host preserves
-Binance OAuth and its native confirmation step, then Sharewell records the stable
-client order IDs, queries fills, refreshes balances, and reports actual allocation
-and remaining drift. One Python core is packaged as a Codex plugin, Claude Code
-plugin, and generic skill bundle, so the workflow stays consistent across agent
-hosts. The development Agentic Spot account is unfunded; no funded live execution
-is claimed.
+Sharewell connects live evidence to an auditable, approval-gated Binance Spot
+workflow:
+
+```text
+live evidence → persistent policies and memory → evaluation
+→ adaptive recommendations → approved rebalance proposal
+→ Binance confirmation → execution and reconciliation → execution learning
+```
+
+The official Binance Agent OS MCP supplies authenticated account and market
+evidence. Sharewell's deterministic core evaluates portfolio state and supplied
+historical Spot Klines, preserves account-scoped policies and snapshots, and
+learns execution quality only from verified outcomes. It presents bounded routes,
+quantities, prices, fees, residuals, and expiry for explicit user approval. The
+host preserves Binance OAuth and native confirmation, then Sharewell records
+client order IDs, queries fills, refreshes balances, and reports reconciliation.
+One Python core is packaged for Codex, Claude Code, and compatible hosts. The
+development Agentic Spot account is unfunded; no funded live execution is claimed.
 
 ## Video platform
 
-<OWNER TO FILL AFTER VIDEO IS CREATED>
+YouTube
 
 ## Public video URL
 
-<OWNER TO FILL AFTER VIDEO IS CREATED>
+https://youtu.be/Y1d_f8lcif0
 
 ## GitHub
 
@@ -52,6 +57,7 @@ https://github.com/ezpahlevi/sharewell
 8. Complete Binance's native confirmation for execution.
 9. Sharewell queries order and fill results.
 10. Sharewell refreshes balances and reports actual allocation and residual drift.
+11. Optional read-only query: ask `Evaluate BTC, ETH and SOL over 3, 7, 14 and 30 days.`
 
 Users without a funded Agentic Spot account can reproduce plugin installation,
 OAuth, the live MCP catalog, live account and market reads, and the deterministic
@@ -60,17 +66,23 @@ sub-account.
 
 ## Evidence status
 
-- 68 local tests pass.
-- GitHub Actions runs tests, compiles production Python, and verifies packaging.
-- Authenticated official Binance MCP reads are verified.
-- The current Agentic Spot account is unfunded.
-- No funded live trade is claimed.
+- 113 local tests pass.
+- GitHub Actions tests, compileall and release packaging pass.
+- Deterministic packaging is verified.
+- Authenticated official Binance Agentic MCP reads are verified, including a
+  read-only `spot.klines` Spot 1d sample.
+- Historical UTC normalization and evaluator path are implemented.
+- The current Agentic Spot account is unfunded; no funded live execution is
+  verified or claimed.
 
 ## Video status
 
-NOT RECORDED YET
+PUBLIC VIDEO AVAILABLE
 
-Video will be produced after the distribution PR is opened.
+The existing 2:27 video demonstrates the core analysis and approved-rebalancing
+workflow. Adaptive portfolio memory and historical market evaluation are
+implemented in the repository but are not all visually demonstrated in that
+recording.
 
 ## Distribution boundary
 

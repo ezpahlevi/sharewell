@@ -50,6 +50,47 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertFalse(result["ok"])
 
+    def test_default_numeraire_is_used_without_changing_explicit_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = self.live_fixture()
+            code, result = self.call("preference-set", {"account": data["account"],
+                                     "key": "default_numeraire", "value": "BTC",
+                                     "source_reference": "synthetic-preference"}, directory)
+            self.assertEqual(code, 0, result)
+            code, result = self.call("analyze", {"snapshot": data}, directory)
+            self.assertEqual(code, 0, result)
+            self.assertEqual(result["result"]["numeraire"], "BTC")
+            self.assertEqual(result["result"]["total_value"], "2")
+            code, result = self.call("analyze", {"snapshot": data, "numeraire": "USDT"}, directory)
+            self.assertEqual(code, 0, result)
+            self.assertEqual(result["result"]["numeraire"], "USDT")
+            self.assertEqual(result["result"]["total_value"], "200")
+
+    def test_historical_inputs_normalizes_native_spot_klines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            day = 86_400_000
+            request = {"captures": [{"source": ENDPOINT, "tool": "spot.klines", "symbol": "BTCUSDT",
+                                      "interval": "1d", "timeZone": "0", "observed_at": now_ms(),
+                                      "evidence": "synthetic-kline-cli", "result": {
+                                          "isError": False, "content": [{"type": "text", "text": json.dumps([
+                                              [0, "100.00", "100.00", "100.00", "100.00", "1.00", day - 1,
+                                               "100.00", 1, "0.50", "50.00", "0"],
+                                              [day, "110.00", "110.00", "110.00", "110.00", "1.00", 2 * day - 1,
+                                               "110.00", 1, "0.50", "55.00", "0"]])}]} }],
+                       "assets": ["BTC"], "numeraire": "USDT", "as_of": 2 * day, "windows_days": [1]}
+            code, result = self.call("historical-inputs", request, directory)
+            self.assertEqual(code, 0, result)
+            self.assertEqual(result["result"]["price_history"][1]["price"], "110.00")
+            self.assertEqual(result["result"]["coverage"]["routes"]["BTC"], "DIRECT")
+            code, evaluation = self.call("evaluate", {"account": snapshot()["account"],
+                                                        "inputs": result["result"],
+                                                        "evaluator_id": "historical_market_performance",
+                                                        "parameters": {"windows_days": [1], "metrics": ["return"]}},
+                                         directory)
+            self.assertEqual(code, 0, evaluation)
+            self.assertEqual(evaluation["result"]["result"]["status"], "PASS")
+            self.assertEqual(evaluation["result"]["runs"][0]["evaluator_id"], "historical_market_performance")
+
     def test_chat_workflow_protocol_through_separate_cli_processes(self):
         """Synthetic host contract test, not a Binance integration test."""
         with tempfile.TemporaryDirectory() as directory:

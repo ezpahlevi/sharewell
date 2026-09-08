@@ -1,20 +1,20 @@
 {
   "name": "sharewell",
   "version": "0.1.0",
-  "description": "Binance Spot portfolio analysis and approved rebalancing through official Binance MCP.",
+  "description": "Binance Spot portfolio analysis, adaptive evaluation, and approved rebalancing through official Binance Agent OS MCP.",
   "author": {
     "name": "ezpahlevi"
   },
   "homepage": "https://github.com/ezpahlevi/sharewell",
   "repository": "https://github.com/ezpahlevi/sharewell",
   "license": "MIT",
-  "keywords": ["binance", "agent-os", "mcp", "portfolio", "rebalance", "spot", "trading"],
+  "keywords": ["binance", "agent-os", "mcp", "portfolio", "evaluation", "adaptive", "rebalance", "spot", "trading"],
   "mcpServers": "./.mcp.json",
   "skills": "./skills/",
   "interface": {
     "displayName": "Sharewell",
-    "shortDescription": "Analyze and rebalance your Binance Spot portfolio.",
-    "longDescription": "Inspect portfolio allocation, review a rebalance proposal, approve orders through Binance MCP, and reconcile the resulting balances in chat.",
+    "shortDescription": "Analyze, evaluate and rebalance your Binance Spot portfolio.",
+    "longDescription": "Inspect live Spot allocation, evaluate historical evidence, review a rebalance proposal, approve orders through Binance MCP, and reconcile resulting balances in chat.",
     "developerName": "ezpahlevi",
     "category": "Productivity",
     "capabilities": [],

@@ -43,6 +43,27 @@ class JournalTests(unittest.TestCase):
         final["balances"][1]["free"] = text(Decimal("100") - quote)
         return receipt, final
 
+    def complete_distinct_execution(self, index):
+        current = deepcopy(self.data)
+        current["observed_at"] = NOW + index
+        for quote in current["quotes"]:
+            quote["observed_at"] = current["observed_at"]
+        plan = propose(current, {"BTC": "75", "USDT": "25"}, fee_allowance_bps="10",
+                       slippage_bps="50", now=current["observed_at"])
+        key = self.journal.save(plan, current)
+        self.journal.approve(key, current["account"], "approval-" + str(index), now=current["observed_at"])
+        issued = self.journal.dispatch(key, current, now=current["observed_at"])
+        receipt, final = self.fill(issued["action"])
+        receipt["observed_at"] = current["observed_at"]
+        receipt["orderId"] = "fixture-order-" + str(index)
+        receipt["fills"][0]["orderId"] = receipt["orderId"]
+        receipt["fills"][0]["tradeId"] = "fixture-trade-" + str(index)
+        final["observed_at"] = current["observed_at"]
+        for quote in final["quotes"]:
+            quote["observed_at"] = final["observed_at"]
+        self.journal.record(key, 0, receipt, now=current["observed_at"])
+        return self.journal.verify(key, final, now=current["observed_at"])
+
     def test_cannot_dispatch_without_approval(self):
         with self.assertRaisesRegex(SharewellError, "APPROVAL_REQUIRED"):
             self.journal.dispatch(self.key, self.data, now=NOW)
@@ -79,6 +100,36 @@ class JournalTests(unittest.TestCase):
         result = self.journal.verify(self.key, final, now=NOW)
         self.assertEqual(result["status"], "VERIFIED")
         self.assertTrue(result["actual_target_differences"])
+        self.assertEqual(len(result["evaluation_runs"]), 2)
+        self.assertEqual(result["learned_preferences"][0]["sample_count"], 1)
+        order_metrics = result["evaluations"]["results"][0]["metrics"]["orders"][0]
+        self.assertEqual(order_metrics["reference_price"], "101")
+        self.assertEqual(order_metrics["slippage_basis"], "INITIAL_QUOTE_TOUCH")
+        self.assertTrue(order_metrics["learning_eligible"])
+        self.assertNotEqual(order_metrics["realized_slippage_bps"], "0")
+
+    def test_verify_learning_is_idempotent_across_retries_and_restart(self):
+        self.approve()
+        issued = self.journal.dispatch(self.key, self.data, now=NOW)
+        receipt, final = self.fill(issued["action"])
+        self.journal.record(self.key, 0, receipt, now=NOW)
+        for current_now in (NOW, NOW + 1, NOW + 2):
+            result = self.journal.verify(self.key, final, now=current_now)
+            self.assertEqual(result["learned_preferences"][0]["sample_count"], 1)
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM learning_observations").fetchone()[0], 1)
+        self.journal.close()
+        self.journal = Journal(self.path)
+        result = self.journal.verify(self.key, final, now=NOW + 3)
+        self.assertEqual(result["learned_preferences"][0]["sample_count"], 1)
+        readonly = {**self.data["account"], "can_trade": False}
+        self.assertEqual(self.journal.learned_get(readonly)["preferences"][0]["sample_count"], 1)
+
+    def test_three_distinct_executions_produce_three_observations(self):
+        for index in (1, 2, 3):
+            result = self.complete_distinct_execution(index)
+            self.assertEqual(result["status"], "VERIFIED")
+        self.assertEqual(self.journal.learned_get(self.data["account"])["preferences"][0]["sample_count"], 3)
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM learning_observations").fetchone()[0], 3)
 
     def test_commission_overrun_blocks_next_dispatch_and_is_reported(self):
         self.approve()

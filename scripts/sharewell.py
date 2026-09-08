@@ -1,5 +1,7 @@
 import argparse
+from copy import deepcopy
 import json
+import os
 import sqlite3
 import sys
 from decimal import DecimalException
@@ -8,10 +10,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.journal import Journal
+from core.policies import account_key
 from core.portfolio import analyze
 from core.rebalance import propose
-from core.schemas import SharewellError, canonical, now_ms, require
-from providers.binance_mcp import bind_order, normalize_snapshot
+from core.schemas import SharewellError, canonical, digest, now_ms, require
+from core.historical_data import build_price_history
+from providers.binance_mcp import bind_order, normalize_kline_capture, normalize_snapshot
 
 
 def pairs(items):
@@ -22,21 +26,95 @@ def pairs(items):
     return result
 
 
+def account_from(request: dict):
+    account = request.get("account")
+    if account is None and isinstance(request.get("snapshot"), dict):
+        account = request["snapshot"].get("account")
+    if account is None and isinstance(request.get("inputs"), dict):
+        for name in ("snapshot", "initial_snapshot", "final_snapshot"):
+            value = request["inputs"].get(name)
+            if isinstance(value, dict) and isinstance(value.get("account"), dict):
+                account = value["account"]
+                break
+    return account
+
+
+def default_state(account: dict) -> str:
+    require(isinstance(account, dict), "MISSING_STATE")
+    if os.name == "nt":
+        root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    target = root / "Sharewell" / "accounts" / digest(account_key(account)) / "sharewell.sqlite3"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return str(target)
+
+
+def state_path(state: str | None, request: dict) -> str:
+    if state:
+        return state
+    return default_state(account_from(request))
+
+
+def selected_snapshot(request: dict, journal: Journal | None = None) -> dict:
+    snapshot = deepcopy(request["snapshot"])
+    if "numeraire" in request:
+        snapshot["numeraire"] = request["numeraire"]
+    elif journal is not None:
+        preference = journal.default_numeraire(snapshot["account"])
+        if preference:
+            snapshot["numeraire"] = preference
+    return snapshot
+
+
 def run(operation: str, request: dict, state: str | None):
     require(isinstance(request, dict), "INVALID_REQUEST")
     if operation == "normalize":
         return normalize_snapshot(request, now=now_ms())
+    if operation == "historical-inputs":
+        normalized = [normalize_kline_capture(capture, now=now_ms()) for capture in request.get("captures", [])]
+        return build_price_history(normalized, assets=request["assets"], numeraire=request["numeraire"],
+                                   as_of=request["as_of"], windows_days=request["windows_days"])
     if operation == "analyze":
-        return analyze(request["snapshot"])
-    require(state is not None, "MISSING_STATE")
-    journal = Journal(state)
+        account = account_from(request)
+        journal = Journal(state_path(state, request)) if account else None
+        try:
+            return analyze(selected_snapshot(request, journal))
+        finally:
+            if journal:
+                journal.close()
+    journal = Journal(state_path(state, request))
     try:
+        account = account_from(request)
+        if operation == "policy-get":
+            return journal.policy_get(account)
+        if operation == "policy-set":
+            return journal.policy_set(account, request["asset"], request["policy"], request["source_reference"])
+        if operation == "preference-get":
+            return journal.preference_get(account, request.get("key"))
+        if operation == "preference-set":
+            return journal.preference_set(account, request["key"], request["value"], request["source_reference"])
+        if operation == "snapshot":
+            return journal.save_snapshot(request["snapshot"], request["reason"], live=request.get("live", False))
+        if operation == "history":
+            return journal.history(account, request.get("limit", 50))
+        if operation == "memory-summary":
+            return journal.memory_summary(account)
+        if operation == "evaluate":
+            return journal.evaluate(account, request["inputs"], evaluator_id=request.get("evaluator_id"),
+                                    parameters=request.get("parameters"), profile=request.get("profile"))
         if operation == "propose":
-            plan = propose(request["snapshot"], request["targets"],
+            snapshot = selected_snapshot(request, journal)
+            policies = journal.policy_get(snapshot["account"])["policies"]
+            learned = journal.learned_get(snapshot["account"])["preferences"]
+            plan = propose(snapshot, request["targets"],
                            fee_allowance_bps=request["fee_allowance_bps"],
                            slippage_bps=request["slippage_bps"],
-                           ttl_ms=request.get("ttl_ms", 120_000))
-            journal.save(plan, request["snapshot"])
+                           ttl_ms=request.get("ttl_ms", 120_000), policies=policies,
+                           learned_preferences=learned)
+            journal.save(plan, snapshot)
             return plan
         key = request["proposal_hash"]
         if operation == "approve":
@@ -62,7 +140,7 @@ def run(operation: str, request: dict, state: str | None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["normalize", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status"])
+    parser.add_argument("operation", choices=["normalize", "historical-inputs", "analyze", "propose", "approve", "dispatch", "record", "verify", "stop", "status", "snapshot", "history", "memory-summary", "evaluate", "policy-get", "policy-set", "preference-get", "preference-set"])
     parser.add_argument("--input", required=True)
     parser.add_argument("--state")
     args = parser.parse_args()

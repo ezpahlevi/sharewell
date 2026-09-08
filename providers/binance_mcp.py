@@ -4,7 +4,13 @@ import re
 from copy import deepcopy
 from decimal import Decimal
 
-from core.schemas import ENDPOINT, SharewellError, canonical, decimal, fresh, require, validate_snapshot
+from core.schemas import ENDPOINT, SharewellError, asset, canonical, decimal, fresh, integer, require, validate_snapshot
+
+
+KLINE_INTERVALS = {"1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h",
+                   "1d", "3d", "1w", "1M"}
+KLINE_FIELDS = ("open_time", "open", "high", "low", "close", "volume", "close_time", "quote_volume",
+                "trades", "taker_buy_volume", "taker_buy_quote_volume", "ignore")
 
 
 def _unique_pairs(items):
@@ -78,6 +84,72 @@ def select(payload, pointer: str):
         else:
             raise SharewellError("POINTER_SCALAR")
     return payload
+
+
+def normalize_kline_capture(capture: dict, *, now: int) -> dict:
+    require(isinstance(capture, dict), "INVALID_KLINE_CAPTURE")
+    require(capture.get("source") == ENDPOINT, "INVALID_SOURCE")
+    require(capture.get("tool") == "spot.klines", "INVALID_KLINE_TOOL")
+    symbol = asset(capture.get("symbol"))
+    interval = capture.get("interval")
+    require(interval in KLINE_INTERVALS, "INVALID_KLINE_INTERVAL")
+    if interval == "1d":
+        require(capture.get("timeZone") == "0", "UNSUPPORTED_HISTORICAL_TIMEZONE")
+    evidence = capture.get("evidence")
+    require(isinstance(evidence, str) and 0 < len(evidence) <= 200, "INVALID_EVIDENCE")
+    observed_at = capture.get("observed_at")
+    fresh(observed_at, now)
+    payload = unwrap(capture.get("result"))
+    require(isinstance(payload, list), "INVALID_KLINE_PAYLOAD")
+    candles = []
+    seen = set()
+    for row in payload:
+        require(isinstance(row, list) and len(row) == len(KLINE_FIELDS), "INVALID_KLINE_ROW")
+        open_time = integer(row[0], "open_time")
+        close_time = integer(row[6], "close_time")
+        require(close_time >= open_time, "INVALID_KLINE_TIME")
+        values = {field: row[index] for index, field in enumerate(KLINE_FIELDS)}
+        for field in ("open", "high", "low", "close", "volume", "quote_volume"):
+            decimal(values[field])
+        integer(values["trades"], "kline_trades")
+        decimal(values["taker_buy_volume"])
+        decimal(values["taker_buy_quote_volume"])
+        require(isinstance(values["ignore"], str), "INVALID_KLINE_ROW")
+        opening = decimal(values["open"])
+        high = decimal(values["high"])
+        low = decimal(values["low"])
+        closing = decimal(values["close"])
+        require(0 < low <= opening <= high and low <= closing <= high, "INVALID_KLINE_RANGE")
+        require(open_time not in seen, "DUPLICATE_KLINE_TIME")
+        seen.add(open_time)
+        candles.append({"symbol": symbol, "interval": interval, "open_time": open_time,
+                        "close_time": close_time, "open": values["open"], "high": values["high"],
+                        "low": values["low"], "close": values["close"], "volume": values["volume"],
+                        "quote_volume": values["quote_volume"]})
+    candles.sort(key=lambda item: item["open_time"])
+    requested_start = capture.get("requested_start")
+    requested_end = capture.get("requested_end")
+    if requested_start is not None:
+        integer(requested_start, "requested_start")
+    if requested_end is not None:
+        integer(requested_end, "requested_end")
+    require(requested_start is None or requested_end is None or requested_start <= requested_end,
+            "INVALID_KLINE_RANGE")
+    complete = bool(candles) and candles[-1]["close_time"] <= observed_at
+    if requested_start is not None:
+        complete = complete and bool(candles) and candles[0]["open_time"] <= requested_start
+    if requested_end is not None:
+        complete = complete and bool(candles) and candles[-1]["close_time"] >= requested_end
+    result = {"source": ENDPOINT, "tool": capture["tool"], "symbol": symbol, "interval": interval,
+              "observed_at": observed_at, "evidence": evidence, "candles": candles,
+              "complete": complete}
+    if interval == "1d":
+        result["time_zone"] = "0"
+    if requested_start is not None:
+        result["requested_start"] = requested_start
+    if requested_end is not None:
+        result["requested_end"] = requested_end
+    return result
 
 
 def normalize_snapshot(request: dict, *, now: int) -> dict:

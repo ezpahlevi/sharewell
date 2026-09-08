@@ -5,10 +5,16 @@ from decimal import Decimal
 from fractions import Fraction
 
 from .filters import validate_limit
+from .evaluation import run_evaluator, run_profile
+from .learning import aggregate, observations_from_evaluation
+from .policies import account_key, normalize
 from .portfolio import analyze, target_differences
 from .rebalance import propose
-from .schemas import (ENDPOINT, ZERO, asset, canonical, decimal, fresh, integer,
+from .schemas import (ENDPOINT, ZERO, asset, canonical, decimal, digest, fresh, integer,
                       now_ms, require, validate_snapshot)
+
+
+SNAPSHOT_REASONS = {"ANALYSIS", "PRE_REBALANCE", "POST_REBALANCE"}
 
 
 def reference(value: object) -> str:
@@ -59,10 +65,58 @@ class Journal:
                 proposal TEXT NOT NULL REFERENCES proposals(hash), idx INTEGER NOT NULL,
                 client_id TEXT NOT NULL UNIQUE, dispatched_at INTEGER NOT NULL,
                 state TEXT NOT NULL, receipt TEXT, PRIMARY KEY(proposal, idx));
+            CREATE TABLE IF NOT EXISTS asset_policies (
+                account TEXT NOT NULL, asset TEXT NOT NULL, policy TEXT NOT NULL,
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                source_reference TEXT NOT NULL, PRIMARY KEY(account, asset));
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                account TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+                updated_at INTEGER NOT NULL, source_reference TEXT NOT NULL,
+                PRIMARY KEY(account, key));
+            CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                snapshot_hash TEXT PRIMARY KEY, account TEXT NOT NULL, observed_at INTEGER NOT NULL,
+                numeraire TEXT NOT NULL, reason TEXT NOT NULL, snapshot TEXT NOT NULL,
+                portfolio TEXT NOT NULL, portfolio_value TEXT, weights TEXT NOT NULL,
+                concentration TEXT NOT NULL, coverage TEXT NOT NULL, evidence TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS evaluation_runs (
+                run_id TEXT PRIMARY KEY, account TEXT NOT NULL, evaluator_id TEXT NOT NULL,
+                evaluator_version INTEGER NOT NULL, scope TEXT NOT NULL, parameters TEXT NOT NULL,
+                input_hash TEXT NOT NULL, inputs TEXT NOT NULL, status TEXT NOT NULL,
+                metrics TEXT NOT NULL, evidence TEXT NOT NULL, score TEXT,
+                warnings TEXT NOT NULL, observations TEXT NOT NULL, created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS learned_preferences (
+                account TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+                sample_count INTEGER NOT NULL, evidence_count INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL, source_reference TEXT NOT NULL,
+                PRIMARY KEY(account, key));
+            CREATE TABLE IF NOT EXISTS learning_observations (
+                observation_id TEXT PRIMARY KEY, account TEXT NOT NULL, key TEXT NOT NULL,
+                value TEXT NOT NULL, evaluator_id TEXT NOT NULL, evaluator_version INTEGER NOT NULL,
+                parameters TEXT NOT NULL, input_hash TEXT NOT NULL, evidence TEXT NOT NULL,
+                created_at INTEGER NOT NULL);
+            CREATE INDEX IF NOT EXISTS learning_observations_account_key
+                ON learning_observations(account, key);
         """)
+        self._migrate_account_keys()
 
     def close(self):
         self.db.close()
+
+    def _migrate_account_keys(self):
+        tables = ("asset_policies", "user_preferences", "portfolio_snapshots",
+                  "evaluation_runs", "learned_preferences", "learning_observations")
+        with self.transaction():
+            for table in tables:
+                rows = self.db.execute("SELECT rowid, account FROM " + table).fetchall()
+                for row in rows:
+                    try:
+                        identity = json.loads(row["account"])
+                        stable = account_key(identity)
+                    except (TypeError, ValueError, json.JSONDecodeError):
+                        continue
+                    if stable != row["account"]:
+                        self.db.execute("UPDATE OR IGNORE " + table + " SET account=? WHERE rowid=?",
+                                        (stable, row["rowid"]))
 
     @contextmanager
     def transaction(self):
@@ -79,11 +133,183 @@ class Journal:
         require(row is not None, "UNKNOWN_PROPOSAL")
         return row
 
+    def _policy_map(self, account: dict) -> dict[str, str]:
+        key = account_key(account)
+        rows = self.db.execute("SELECT asset, policy FROM asset_policies WHERE account=? ORDER BY asset", (key,)).fetchall()
+        return normalize({row["asset"]: row["policy"] for row in rows})
+
+    def policy_get(self, account: dict) -> dict:
+        key = account_key(account)
+        rows = self.db.execute("SELECT asset, policy, created_at, updated_at, source_reference FROM asset_policies WHERE account=? ORDER BY asset", (key,)).fetchall()
+        return {"account": account, "policies": [dict(row) for row in rows]}
+
+    def policy_set(self, account: dict, name: str, policy: str, source_reference: str, *, now=None) -> dict:
+        now = now_ms() if now is None else now
+        account_ref = account_key(account)
+        asset(name)
+        require(policy in {"ALLOW", "BLOCK", "REMOVE"}, "INVALID_POLICY")
+        reference(source_reference)
+        with self.transaction():
+            if policy == "REMOVE":
+                self.db.execute("DELETE FROM asset_policies " + "WHERE account=? AND asset=?", (account_ref, name))
+            else:
+                existing = self.db.execute("SELECT created_at FROM asset_policies WHERE account=? AND asset=?",
+                                           (account_ref, name)).fetchone()
+                created = existing["created_at"] if existing else now
+                self.db.execute("INSERT OR REPLACE INTO asset_policies VALUES (?, ?, ?, ?, ?, ?)",
+                                (account_ref, name, policy, created, now, source_reference))
+        return self.policy_get(account)
+
+    def preference_get(self, account: dict, key: str | None = None) -> dict:
+        account_ref = account_key(account)
+        if key is None:
+            rows = self.db.execute("SELECT key, value, updated_at, source_reference FROM user_preferences WHERE account=? ORDER BY key",
+                                   (account_ref,)).fetchall()
+        else:
+            require(key == "default_numeraire", "INVALID_PREFERENCE")
+            rows = self.db.execute("SELECT key, value, updated_at, source_reference FROM user_preferences WHERE account=? AND key=?",
+                                   (account_ref, key)).fetchall()
+        return {"account": account, "preferences": [dict(row) for row in rows]}
+
+    def default_numeraire(self, account: dict):
+        rows = self.preference_get(account, "default_numeraire")["preferences"]
+        return rows[0]["value"] if rows else None
+
+    def preference_set(self, account: dict, key: str, value: str, source_reference: str, *, now=None) -> dict:
+        now = now_ms() if now is None else now
+        account_ref = account_key(account)
+        require(key == "default_numeraire", "INVALID_PREFERENCE")
+        asset(value)
+        reference(source_reference)
+        with self.transaction():
+            self.db.execute("INSERT OR REPLACE INTO user_preferences VALUES (?, ?, ?, ?, ?)",
+                            (account_ref, key, value, now, source_reference))
+        return self.preference_get(account, key)
+
+    def save_snapshot(self, snapshot: dict, reason: str, *, live=False, now=None) -> dict:
+        now = now_ms() if now is None else now
+        require(type(live) is bool and live, "LIVE_SNAPSHOT_REQUIRED")
+        require(reason in SNAPSHOT_REASONS, "INVALID_SNAPSHOT_REASON")
+        validate_snapshot(snapshot, now)
+        report = analyze(snapshot, now)
+        snapshot_hash = digest({"reason": reason, "snapshot": snapshot})
+        weights = {row["asset"]: row["weight_pct"] for row in report["assets"]}
+        with self.transaction():
+            self.db.execute("INSERT OR IGNORE INTO portfolio_snapshots VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (snapshot_hash, account_key(snapshot["account"]), snapshot["observed_at"],
+                             snapshot["numeraire"], reason, canonical(snapshot), canonical(report),
+                             report["total_value"], canonical(weights), canonical(report["concentration"]),
+                             report["coverage"], canonical(report["evidence"])))
+        return self._snapshot_row(snapshot_hash)
+
+    def _snapshot_row(self, snapshot_hash: str) -> dict:
+        row = self.db.execute("SELECT * FROM portfolio_snapshots WHERE snapshot_hash=?", (snapshot_hash,)).fetchone()
+        require(row is not None, "SNAPSHOT_NOT_FOUND")
+        result = dict(row)
+        for key in ("snapshot", "portfolio", "weights", "concentration", "evidence"):
+            result[key] = json.loads(result[key])
+        return result
+
+    def history(self, account: dict, limit: int = 50) -> dict:
+        account_ref = account_key(account)
+        require(type(limit) is int and 0 < limit <= 1000, "INVALID_HISTORY_LIMIT")
+        rows = self.db.execute("SELECT * FROM portfolio_snapshots WHERE account=? ORDER BY observed_at DESC, snapshot_hash DESC LIMIT ?",
+                               (account_ref, limit)).fetchall()
+        return {"account": account, "history": [self._snapshot_row(row["snapshot_hash"]) for row in rows],
+                "current_truth": "LIVE_INPUT_REQUIRED"}
+
+    def memory_summary(self, account: dict) -> dict:
+        history = self.history(account, 1)["history"]
+        return {"account": account, "policies": self.policy_get(account)["policies"],
+                "preferences": self.preference_get(account)["preferences"],
+                "learned_preferences": self.learned_get(account)["preferences"],
+                "latest_snapshot": history[0] if history else None,
+                "current_truth": "LIVE_INPUT_REQUIRED"}
+
+    def learned_get(self, account: dict) -> dict:
+        account_ref = account_key(account)
+        rows = self.db.execute("SELECT key, value, sample_count, evidence_count, updated_at, source_reference FROM learned_preferences WHERE account=? ORDER BY key",
+                               (account_ref,)).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["value"] = json.loads(item["value"])
+            result.append(item)
+        return {"account": account, "preferences": result}
+
+    def _apply_learning(self, account: dict, proposal: dict, evaluation: dict, now: int) -> list[dict]:
+        observations = observations_from_evaluation(proposal, evaluation)
+        account_ref = account_key(account)
+        for observation in observations:
+            inserted = self.db.execute("INSERT OR IGNORE INTO learning_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                       (observation["observation_id"], account_ref, observation["key"],
+                                        str(observation["value"]), observation["evaluator_id"],
+                                        observation["version"], canonical(observation["parameters"]),
+                                        observation["input_hash"], canonical(observation["evidence"]), now)).rowcount
+            if not inserted:
+                continue
+            row = self.db.execute("SELECT value, sample_count, evidence_count FROM learned_preferences WHERE account=? AND key=?",
+                                  (account_ref, observation["key"])).fetchone()
+            old_value = json.loads(row["value"]) if row else None
+            old_count = row["sample_count"] if row else 0
+            value, sample_count, evidence_count = aggregate(old_value, old_count, observation)
+            previous_evidence = row["evidence_count"] if row else 0
+            source = "observation:" + observation["observation_id"]
+            self.db.execute("INSERT OR REPLACE INTO learned_preferences VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (account_ref, observation["key"], canonical(value), sample_count,
+                             previous_evidence + evidence_count, now, source))
+        return self.learned_get(account)["preferences"]
+
+    def _save_evaluation(self, account: dict, result: dict, inputs: dict, created_at: int) -> dict:
+        run_id = digest({"account": account_key(account), "evaluator_id": result["evaluator_id"],
+                         "version": result["version"], "parameters": result["parameters"],
+                         "input_hash": result["input_hash"]})
+        self.db.execute("INSERT OR IGNORE INTO evaluation_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (run_id, account_key(account), result["evaluator_id"], result["version"],
+                         result["scope"], canonical(result["parameters"]), result["input_hash"],
+                         canonical(inputs), result["status"], canonical(result["metrics"]),
+                         canonical(result["evidence"]), result["score"], canonical(result["warnings"]),
+                         canonical(result["observations"]), created_at))
+        return self.evaluation_row(run_id)
+
+    def evaluation_row(self, run_id: str) -> dict:
+        row = self.db.execute("SELECT * FROM evaluation_runs WHERE run_id=?", (run_id,)).fetchone()
+        require(row is not None, "EVALUATION_NOT_FOUND")
+        result = dict(row)
+        for key in ("parameters", "inputs", "metrics", "evidence", "warnings", "observations"):
+            result[key] = json.loads(result[key])
+        return result
+
+    def evaluate(self, account: dict, inputs: dict, *, evaluator_id: str | None = None,
+                 parameters: dict | None = None, profile: str | None = None, now=None) -> dict:
+        now = now_ms() if now is None else now
+        require((evaluator_id is None) != (profile is None), "EVALUATION_SELECTOR_REQUIRED")
+        if profile is not None:
+            result = run_profile(profile, inputs, parameters)
+            results = result["results"]
+        else:
+            result = run_evaluator(evaluator_id, inputs, parameters)
+            results = [result]
+        with self.transaction():
+            runs = [self._save_evaluation(account, item, inputs, now) for item in results]
+        return {"result": result, "runs": runs}
+
+    def _validate_policy_lock(self, plan: dict, snapshot: dict) -> None:
+        generated = propose(snapshot, plan["targets"],
+                            fee_allowance_bps=plan["fee_allowance_bps"],
+                            slippage_bps=plan["slippage_bps"], now=plan["created_at"],
+                            ttl_ms=plan["expires_at"] - plan["created_at"],
+                            policies=self._policy_map(plan["account"]),
+                            learned_preferences=plan.get("learning_preferences"))
+        require(generated == plan, "POLICY_CHANGED")
+
     def save(self, proposal: dict, snapshot: dict) -> str:
         generated = propose(snapshot, proposal["targets"],
                             fee_allowance_bps=proposal["fee_allowance_bps"],
                             slippage_bps=proposal["slippage_bps"], now=proposal["created_at"],
-                            ttl_ms=proposal["expires_at"] - proposal["created_at"])
+                            ttl_ms=proposal["expires_at"] - proposal["created_at"],
+                            policies=proposal.get("policy_context"),
+                            learned_preferences=proposal.get("learning_preferences"))
         require(generated == proposal, "PROPOSAL_MISMATCH")
         with self.transaction():
             self.db.execute("INSERT OR IGNORE INTO proposals VALUES (?, ?, ?, ?, 'PROPOSED', NULL)",
@@ -98,6 +324,7 @@ class Journal:
             plan = json.loads(row["proposal"])
             require(row["state"] == "PROPOSED", "INVALID_APPROVAL_STATE")
             require(plan["account"] == account, "APPROVAL_ACCOUNT_MISMATCH")
+            self._validate_policy_lock(plan, json.loads(row["snapshot"]))
             require(plan["created_at"] <= now < plan["expires_at"], "PROPOSAL_EXPIRED")
             require(plan["execution_eligible"] and bool(plan["orders"]), "NO_EXECUTABLE_ORDERS")
             active = self.db.execute("SELECT hash FROM proposals WHERE account=? AND state='APPROVED'", (row["account"],)).fetchone()
@@ -114,6 +341,7 @@ class Journal:
             require(row["state"] == "APPROVED", "APPROVAL_REQUIRED")
             require(plan["created_at"] <= now < plan["expires_at"], "PROPOSAL_EXPIRED")
             require(snapshot["account"] == plan["account"], "ACCOUNT_CHANGED")
+            self._validate_policy_lock(plan, json.loads(row["snapshot"]))
             previous = self.db.execute("SELECT * FROM orders WHERE proposal=? ORDER BY idx", (proposal_hash,)).fetchall()
             require(all(order["state"] == "FILLED" for order in previous),
                     "ORDER_UNRESOLVED")
@@ -223,10 +451,20 @@ class Journal:
             require(snapshot["account"] == plan["account"], "FINAL_ACCOUNT_MISMATCH")
             orders = self.db.execute("SELECT * FROM orders WHERE proposal=? ORDER BY idx", (proposal_hash,)).fetchall()
             require(len(orders) == len(plan["orders"]) and all(o["state"] == "FILLED" for o in orders), "EXECUTION_INCOMPLETE")
-            self._reconcile(plan, json.loads(row["snapshot"]), orders, snapshot)
+            initial = json.loads(row["snapshot"])
+            self._reconcile(plan, initial, orders, snapshot)
+            evaluation_inputs = {"proposal": plan, "orders": [{"idx": order["idx"], "state": order["state"],
+                              "client_id": order["client_id"],
+                              "receipt": json.loads(order["receipt"])} for order in orders],
+                                 "initial_snapshot": initial, "final_snapshot": snapshot}
+            evaluation = run_profile("verification", evaluation_inputs)
+            runs = [self._save_evaluation(plan["account"], item, evaluation_inputs, now)
+                    for item in evaluation["results"]]
+            learned = self._apply_learning(plan["account"], plan, evaluation, now)
             result = {"status": "VERIFIED", "proposal_hash": proposal_hash, "portfolio": report,
                       "fee_reviews": fee_reviews(plan, orders),
-                      "actual_target_differences": target_differences(report, plan["targets"])}
+                      "actual_target_differences": target_differences(report, plan["targets"]),
+                      "evaluations": evaluation, "evaluation_runs": runs, "learned_preferences": learned}
             self.db.execute("UPDATE proposals SET state='VERIFIED' WHERE hash=?", (proposal_hash,))
         return result
 

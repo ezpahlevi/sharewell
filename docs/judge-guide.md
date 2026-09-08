@@ -3,9 +3,10 @@
 ## Product
 
 Sharewell is a conversational Binance Spot portfolio agent. It reads live account
-and market state through the official Binance Agent OS MCP, calculates exposure and
-allocation drift, prepares bounded rebalance plans, requires explicit approval, and
-reconciles execution results in chat.
+and market state through the official Binance Agent OS MCP, evaluates supplied
+historical Spot Kline evidence, calculates exposure and allocation drift, prepares
+bounded rebalance plans, requires explicit approval, and reconciles execution
+results in chat.
 
 ## Problem
 
@@ -47,6 +48,14 @@ owns deterministic financial calculations and its persistent SQLite journal.
 - Immutable proposal hashes and stable client order IDs.
 - Duplicate-dispatch protection, unknown-submission handling, and partial-fill state.
 - Post-fill balance reconciliation with explicit fee reviews.
+- Persistent account-scoped portfolio memory, including asset allowlist/blocklist
+  and portfolio snapshots.
+- Multi-numeraire analysis and a generic evaluator registry extensible without
+  evaluator-specific branches in portfolio or execution code.
+- Historical Spot Kline evaluation with runtime-configurable windows, metrics and
+  benchmark inputs; daily windows use explicitly UTC-aligned Binance `1d` Klines.
+- Deterministic execution-quality learning from verified outcomes, with immutable
+  evaluation and learning provenance where it affects a proposal.
 
 ## Safety model
 
@@ -59,9 +68,10 @@ blindly repeated.
 
 | State | Evidence |
 | --- | --- |
-| VERIFIED LOCAL | 68 deterministic tests, packaging, installation, and source checks |
-| VERIFIED AUTHENTICATED BINANCE READ | OAuth catalog, account, open orders, market, filter, commission, and execution-rule reads |
-| IMPLEMENTED | Proposal, approval, dispatch guard, journaling, fill recording, and reconciliation paths |
+| VERIFIED LOCAL | 113 deterministic tests, compileall, diff check, reproducible packaging, installation, and source checks |
+| VERIFIED CI | GitHub Actions tests, production compileall, and release packaging |
+| VERIFIED AUTHENTICATED BINANCE READ | OAuth catalog, account, open orders, market, filter, commission, execution-rule, and read-only `spot.klines` reads |
+| IMPLEMENTED | Proposal, approval, dispatch guard, journaling, fill recording, reconciliation, adaptive evaluation, and learning paths |
 | NOT VERIFIED FUNDED | Development Agentic Spot account has no balances; no funded order or live rebalance is claimed |
 
 ## Installation and reproduction

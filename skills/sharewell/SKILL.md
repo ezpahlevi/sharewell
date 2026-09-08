@@ -26,6 +26,71 @@ sessions and hosts for that account. Never delete a journal to bypass a lock.
 `analyze` does not need `--state`. Every command exits; do not run a watcher.
 Read `references/protocol.md` before collecting inputs or calling the CLI.
 
+When `--state` is omitted and the request identifies an account, the runtime
+uses the account-hash path for that account. An explicit state path remains
+compatible for existing journals.
+
+Use `policy-get` and `policy-set` to inspect or change hard asset policies.
+Every mutation needs the actual user message reference as `source_reference`.
+BLOCK takes precedence over ALLOW. Policies never hide balances from analysis;
+blocked or unallowlisted assets remain visible and create residual issues rather
+than being silently sold. Use `preference-get` and `preference-set` for the
+explicit `default_numeraire` preference. A current request `numeraire` overrides
+the stored preference for that analysis and does not change the preference.
+
+Use `snapshot` with `live:true` after a validated live capture to persist
+`ANALYSIS`, `PRE_REBALANCE` or `POST_REBALANCE` history. A fixture or other
+synthetic input must not be marked live. Use `history` and `memory-summary` for
+auditable memory; they are not current Binance truth. Refresh live evidence for
+every current analysis or execution decision.
+
+Use `evaluate` for a registered evaluator or declarative profile. Evaluation
+results are auditable history, not current Binance truth. The built-in
+Historical Market Performance evaluator accepts explicit validated
+`price_history` and runtime windows/metrics/benchmark; it is descriptive and
+never predicts or trades. The evaluator accepts supplied validated price
+history; Binance Agentic MCP Kline ingestion is implemented only through the
+host's verified `spot.klines` read, not inside the evaluator.
+
+For a user request such as "Evaluate my holdings over 3, 7, 14 and 30 days":
+
+1. Derive the requested assets and numeraire from the live portfolio context or
+   the explicit user request. Do not add default assets.
+2. Discover `spot.klines` in the current official catalog with `tool_search`.
+   Use `tool_execute` for the exact native name under META mode.
+3. Fetch the required Spot `1d` Klines with `timeZone:"0"` and a small buffer
+   beyond the largest requested window. Capture the exact native result,
+   requested pair and interval, explicit UTC timezone, fresh observation time
+   and actual host call reference. Sharewell historical day windows use
+   UTC-aligned Binance Spot `1d` candles; do not omit or replace this field.
+4. Run `historical-inputs` with those captures, the requested assets, numeraire,
+   as-of timestamp and runtime windows. It validates native rows, uses candle
+   closes, resolves direct/inverse pairs and returns `price_history` plus
+   coverage/evidence.
+5. Pass that result to the generic `evaluate` operation with
+   `evaluator_id:"historical_market_performance"` or a registered profile and
+   the requested runtime metrics/benchmark. The journal persists the generic
+   evaluation run.
+6. Explain the evidence, pair route and any `PARTIAL`/`UNAVAILABLE` coverage.
+   Never turn missing history into zero performance.
+
+The current native tool is read-only market data. Do not use UI Klines when
+standard Klines are required for evaluation, do not use Futures or direct REST,
+do not use custom Kline timezone evaluation, and do not let the host, local or
+user timezone alter historical results, and do not claim live historical Binance
+evaluation unless the current native read and production normalizer both
+succeed.
+Verification records generic execution-quality and portfolio-outcome runs. A
+result with incomplete evidence is `PARTIAL` or `UNAVAILABLE`, not a fabricated
+metric.
+
+After verified interactions, Sharewell may aggregate execution observations in
+`learned_preferences`. Route penalties require at least three observations with a
+fresh initial quote-touch reference and can only rank routes that are already
+executable. Learning
+cannot change hard policies, the approval gate, Spot-only limits or an approved
+proposal. There is no background polling or autonomous trading loop.
+
 ## Connect and inspect
 
 1. Inspect the host's native MCP connections and tool schemas. Reuse the official

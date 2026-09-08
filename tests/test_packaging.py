@@ -61,6 +61,35 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 package(first)
 
+    def test_zip_is_identical_for_lf_and_crlf_sources(self):
+        files = {
+            "README.md": "readme\n",
+            ".gitignore": "state\n",
+            ".mcp.json": "{}\n",
+            "LICENSE": "MIT\n",
+            ".codex-plugin/plugin.json": '{"name":"sharewell","version":"1"}\n',
+            ".claude-plugin/plugin.json": "{}\n",
+            "skills/sharewell/SKILL.md": "skill\n",
+            "core/journal.py": "from pathlib import Path\n",
+            "providers/binance_mcp.py": "VALUE = 1\n",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            roots = []
+            for newline in ("\n", "\r\n"):
+                root = Path(directory) / ("lf" if newline == "\n" else "crlf")
+                for name, content in files.items():
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(content.replace("\n", newline).encode())
+                roots.append(root)
+            first = Path(directory) / "lf.zip"
+            second = Path(directory) / "crlf.zip"
+            package(first, roots[0])
+            package(second, roots[1])
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with zipfile.ZipFile(first) as archive:
+                self.assertTrue(all(info.create_system == 3 for info in archive.infolist()))
+
     def test_repository_marketplace_registers_root_plugin(self):
         marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
         self.assertEqual(marketplace["name"], "sharewell")

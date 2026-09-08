@@ -51,6 +51,30 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `MISSING_FIELD_MAP` | A row mapping omits required fields. |
 | `INVALID_ACCOUNT_MAP` | Agentic account mapping must contain `id` and `can_trade`. |
 | `INVALID_ACCOUNT_ID` | The authenticated account identifier is missing or invalid. |
+| `INVALID_KLINE_CAPTURE` | A native Spot Kline capture is malformed. |
+| `INVALID_KLINE_TOOL` | The capture is not from the verified Spot Kline tool. |
+| `INVALID_KLINE_INTERVAL` | The Kline interval is not in the native catalog. |
+| `UNSUPPORTED_HISTORICAL_TIMEZONE` | Historical daily Kline evidence is not explicitly UTC-aligned. |
+| `INVALID_KLINE_PAYLOAD` | The native Kline result is not an array. |
+| `INVALID_KLINE_ROW` | A native Kline row does not have the expected shape. |
+| `INVALID_KLINE_TIME` | A Kline close time precedes its open time. |
+| `INVALID_KLINE_RANGE` | Kline bounds or requested history bounds are invalid. |
+| `DUPLICATE_KLINE_TIME` | A candle open time repeats in one captured history. |
+| `INVALID_HISTORICAL_ASSETS` | Requested historical assets are missing or malformed. |
+| `DUPLICATE_HISTORICAL_ASSET` | A requested historical asset repeats. |
+| `INVALID_HISTORICAL_WINDOWS` | Historical windows are not unique positive integers. |
+| `INVALID_HISTORICAL_CAPTURES` | Historical capture input is not an array. |
+| `INVALID_NORMALIZED_KLINE` | Normalized Kline data is malformed. |
+| `INVALID_HISTORICAL_SOURCE` | Normalized history lacks a source label. |
+| `UNSUPPORTED_HISTORICAL_INTERVAL` | Only daily Klines are supported by the day-window adapter. |
+| `INVALID_KLINE_COMPLETENESS` | Normalized history lacks a Boolean completeness flag. |
+| `MIXED_KLINE_METADATA` | A candle symbol or interval differs from its capture. |
+| `INVALID_KLINE_CLOSE` | A candle close is not a positive decimal string. |
+| `UNEXPECTED_HISTORICAL_SYMBOL` | A Kline pair is not requested for this numeraire. |
+| `DUPLICATE_HISTORICAL_PAIR` | More than one capture supplies the same Spot pair. |
+| `INVALID_BENCHMARK_HISTORY` | Portfolio benchmark history is malformed or lacks evidence. |
+| `DUPLICATE_BENCHMARK_HISTORY` | Portfolio benchmark timestamps repeat. |
+| `DUPLICATE_PRICE_HISTORY` | Historical price timestamps repeat for an asset. |
 
 ## Portfolio and proposal
 
@@ -87,6 +111,52 @@ Sharewell returns stable codes in `error`. Stop the dependent action when a code
 | `PROPOSAL_LEG_LIMIT` | A proposal would exceed 256 order legs. |
 | `ORDER_EXCEEDS_BUDGET` | Rounded order cost exceeds its available source amount. |
 | `ROUTE_EXCEEDS_BALANCE` | A route consumes more free balance than available. |
+| `INVALID_POLICIES` | Asset policy input is not a supported map or list. |
+| `INVALID_POLICY` | An asset policy is not ALLOW or BLOCK. |
+| `INVALID_PREFERENCE` | A user preference key is unsupported. |
+| `POLICY_CHANGED` | Current hard policy differs from the proposed policy context. |
+| `ASSET_NOT_ALLOWED` | An asset is outside the configured allowlist. |
+| `BLOCKED_ASSET` | A blocked asset would need to change allocation. |
+| `LIVE_SNAPSHOT_REQUIRED` | Snapshot persistence requires an explicit live-evidence gate. |
+| `INVALID_SNAPSHOT_REASON` | Snapshot reason is unsupported. |
+| `SNAPSHOT_NOT_FOUND` | Persisted portfolio snapshot is missing. |
+| `INVALID_HISTORY_LIMIT` | History limit is outside the supported range. |
+| `INVALID_EVALUATOR_ID` | Evaluator ID is not stable identifier text. |
+| `INVALID_EVALUATOR_VERSION` | Evaluator version is not a positive integer. |
+| `INVALID_EVALUATOR_SCOPE` | Evaluator scope is missing or malformed. |
+| `INVALID_EVALUATOR_INPUTS` | Evaluator required inputs are malformed. |
+| `DUPLICATE_EVALUATOR_INPUT` | Evaluator required inputs repeat a name. |
+| `INVALID_EVALUATOR_CONTRACT` | Evaluator does not implement the required contract. |
+| `DUPLICATE_EVALUATOR` | Evaluator ID is already registered by another implementation. |
+| `UNKNOWN_EVALUATOR` | No evaluator is registered for the requested ID. |
+| `INVALID_EVALUATION_INPUT` | Evaluation input is not an object. |
+| `MISSING_EVALUATION_INPUT` | A declared evaluator input is absent. |
+| `INVALID_EVALUATION_PARAMETERS` | Evaluator parameters failed validation. |
+| `INVALID_EVALUATION_RESULT` | Evaluator result is not an object. |
+| `INVALID_EVALUATION_STATUS` | Evaluation status is unsupported. |
+| `INVALID_EVALUATION_METRICS` | Evaluation metrics are not an object. |
+| `INVALID_EVALUATION_EVIDENCE` | Evaluation evidence references are malformed. |
+| `INVALID_EVALUATION_WARNINGS` | Evaluation warnings are malformed. |
+| `INVALID_EVALUATION_OBSERVATIONS` | Evaluation observations are malformed. |
+| `INVALID_EVALUATION_SCORE` | Evaluation score is malformed. |
+| `FLOAT_EVALUATION_VALUE` | Evaluation data contains a binary float. |
+| `INVALID_EVALUATION_VALUE` | Evaluation data contains an unsupported value. |
+| `EVALUATION_NOT_FOUND` | Persisted evaluation run is missing. |
+| `EVALUATION_SELECTOR_REQUIRED` | Exactly one evaluator or profile is required. |
+| `UNKNOWN_PROFILE` | No evaluation profile is registered for the requested name. |
+| `INVALID_PROFILE` | Evaluation profile is malformed. |
+| `DUPLICATE_PROFILE` | Evaluation profile name is already registered. |
+| `INVALID_PROFILE_PARAMETERS` | Profile parameter overrides are malformed. |
+| `INVALID_PRICE_HISTORY` | Historical price input is malformed. |
+| `INVALID_EXECUTION_INPUT` | Execution evaluation input is malformed. |
+| `INCOMPLETE_EXECUTION_INPUT` | Execution evaluation lacks an authoritative receipt. |
+| `NUMERAIRE_MISMATCH` | Outcome inputs use different numeraires. |
+| `INVALID_LEARNED_PREFERENCES` | Learned preference input is malformed. |
+| `INVALID_LEARNED_PREFERENCE` | A learned preference row is malformed. |
+| `INVALID_LEARNED_VALUE` | A learned numeric value is not a finite signed decimal. |
+| `INVALID_ROUTE` | Route input is malformed. |
+| `INVALID_LEARNING_INPUT` | Learning input does not bind to the proposal. |
+| `INCOMPARABLE_EXECUTION_COST` | Execution lacks a fresh initial quote-touch reference. |
 
 ## Binance admission checks
 
